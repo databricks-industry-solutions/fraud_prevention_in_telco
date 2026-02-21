@@ -1,1 +1,11 @@
-# Check here to get the latest version of the databricks-cli: https://github.com/databricks/cli
+# Root-level dependencies (template-aligned).
+# Job environment deps are defined in resources/fraud_pipeline_job.yml.
+# For local dev / tests, use: pip install -r requirements.txt
+
+pandas>=1.5.0
+numpy>=1.21.0
+scikit-learn>=1.1.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+hdbscan>=0.8.0
+faker>=18.0.0

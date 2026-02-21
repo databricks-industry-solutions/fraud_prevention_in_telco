@@ -1,94 +1,214 @@
+# Industry Solutions Blueprint style: single bundle file, jobs + dashboards inline
 bundle:
-  name: demo_workflow
+  name: fraud-data-pipeline
 
 variables:
-  # Project name - replace with your solution accelerator name
   project_name:
     description: "Name of your solution accelerator"
-    default: "my-solution-accelerator"
-    
-  # The "warehouse_id" variable is used to reference the warehouse used by the dashboard.
+    default: "telecom-fraud-data-pipeline"
   warehouse_id:
     lookup:
-      # Replace this with the name of your SQL warehouse.
-      warehouse: "Shared Unity Catalog Serverless"
-      
-  # Environment variable used for deployment paths
+      warehouse: "Shared Endpoint"
   environment:
     description: "Deployment environment (dev, staging, prod)"
     default: "dev"
+  catalog:
+    description: "Unity Catalog name"
+    default: "telecommunications"
+  schema:
+    description: "Schema name for fraud detection tables"
+    default: "fraud_data"
 
 targets:
   dev:
     default: true
     mode: development
+    workspace:
+      profile: e2-demo-west
+    variables:
+      catalog: "telecommunications"
+      schema: "fraud_data"
 
-# Customize the resources below based on your solution accelerator needs
+  prod:
+    mode: production
+    workspace:
+      profile: e2-demo-west
+    variables:
+      catalog: "telecommunications"
+      schema: "fraud_data"
+
 resources:
-  # Uncomment and customize if you have Databricks Apps
-  # apps:
-  #   your_app:
-  #     name: "your-app-name"
-  #     description: "Your app description"
-  #     source_code_path: "/Users/${workspace.current_user.userName}/${var.project_name}-${var.environment}/files/apps/your_app"
+  volumes:
+    raw_app_transactions:
+      catalog_name: ${var.catalog}
+      schema_name: ${var.schema}
+      name: "raw_app_transactions"
+      volume_type: "MANAGED"
 
-  # Uncomment and customize if you have dashboards
-  # dashboards:
-  #   your_dashboard:
-  #     display_name: "Your Dashboard"
-  #     file_path: "./dashboards/your_dashboard.lvdash.json"
-  #     warehouse_id: "${var.warehouse_id}"
+    raw_device_sdk:
+      catalog_name: ${var.catalog}
+      schema_name: ${var.schema}
+      name: "raw_device_sdk"
+      volume_type: "MANAGED"
 
-  # Example job workflow - customize based on your notebooks
   jobs:
-    example_workflow:
-      name: "${var.project_name} - Example Workflow"
+    fraud_data_pipeline:
+      name: "[${bundle.target}] Fraud Data Pipeline"
+      parameters:
+        - name: catalog
+          default: "${var.catalog}"
+        - name: schema
+          default: "${var.schema}"
       tasks:
-        - task_key: example_notebook
-          notebook_task:
-            notebook_path: "./notebooks/example_notebook.ipynb"
-        - task_key: example_databricks_notebook
+        - task_key: Device_ID_Reference
+          spark_python_task:
+            python_file: ./notebooks/generate_device_id_reference.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Raw_Device_SDK
           depends_on:
-            - task_key: example_notebook
-          notebook_task:
-            notebook_path: "./notebooks/example_databricks_notebook.py"
+            - task_key: Device_ID_Reference
+          spark_python_task:
+            python_file: ./notebooks/generate_raw_device_sdk.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
 
-# Example resources you can uncomment and customize:
-# resources:
-#   apps:
-#     your_app:
-#       name: "your-app-name"
-#       description: "Your app description"
-#       source_code_path: "./apps/your_app"
-#
-#   jobs:
-#     your_workflow:
-#       name: "Your Workflow Name"
-#       tasks:
-#         - task_key: first_task
-#           notebook_task:
-#             notebook_path: "./notebooks/your_first_notebook.ipynb"
-#         - task_key: second_task
-#           depends_on:
-#             - task_key: first_task
-#           notebook_task:
-#             notebook_path: "./notebooks/your_second_notebook.ipynb"
-#
-#   pipelines:
-#     your_pipeline:
-#       name: "Your Pipeline"
-#       storage: "/Shared/your-pipeline"
-#       configuration:
-#         your_config: "value"
-#
-#   models:
-#     your_model:
-#       name: "Your Model"
-#       model_path: "models/your_model"
-#
-#   dashboards:
-#     your_dashboard:
-#       display_name: "Your Dashboard"
-#       file_path: "./dashboards/your_dashboard.lvdash.json"
+        - task_key: Bronze_Device_SDK
+          depends_on:
+            - task_key: Raw_Device_SDK
+          spark_python_task:
+            python_file: ./notebooks/generate_bronze_device_sdk.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+              - "--source"
+              - "volume"
+          environment_key: fraud_data_pipeline_environment
 
-# For more options and schema, see: https://docs.databricks.com/aws/en/dev-tools/bundles/settings
+        - task_key: Raw_App_Transactions
+          depends_on:
+            - task_key: Device_ID_Reference
+          spark_python_task:
+            python_file: ./notebooks/generate_raw_app_transactions.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Bronze_Transactions
+          depends_on:
+            - task_key: Raw_App_Transactions
+          spark_python_task:
+            python_file: ./notebooks/generate_bronze_app_transactions.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+              - "--source"
+              - "volume"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Silver_Device_SDK
+          depends_on:
+            - task_key: Bronze_Device_SDK
+          spark_python_task:
+            python_file: ./notebooks/generate_silver_device_sdk.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Silver_Transactions
+          depends_on:
+            - task_key: Bronze_Transactions
+          spark_python_task:
+            python_file: ./notebooks/generate_silver_app_transactions.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Gold_Transactions
+          depends_on:
+            - task_key: Silver_Transactions
+          spark_python_task:
+            python_file: ./notebooks/generate_gold_app_transactions.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Risk_Engine
+          depends_on:
+            - task_key: Gold_Transactions
+          spark_python_task:
+            python_file: ./notebooks/risk_engine.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: analyst_simulation
+          depends_on:
+            - task_key: Risk_Engine
+          spark_python_task:
+            python_file: ./notebooks/run_analyst_simulation.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+      queue:
+        enabled: true
+
+      environments:
+        - environment_key: Default
+          spec:
+            client: "1"
+        - environment_key: fraud_data_pipeline_environment
+          spec:
+            dependencies:
+              - "pandas>=1.5.0"
+              - "numpy>=1.21.0"
+              - "scikit-learn>=1.1.0"
+              - "matplotlib>=3.5.0"
+              - "seaborn>=0.11.0"
+              - "hdbscan>=0.8.0"
+              - "faker>=18.0.0"
+            client: "1"
+
+      permissions:
+        - level: CAN_VIEW
+          group_name: "users"
+        - level: CAN_MANAGE_RUN
+          group_name: "users"
+
+  dashboards:
+    fraud_detection:
+      display_name: "Fraud Detection"
+      file_path: "./dashboards/fraud_detection.lvdash.json"
+      warehouse_id: "${var.warehouse_id}"

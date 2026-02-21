@@ -1,0 +1,155 @@
+{
+  "name": "fraud_data_pipeline",
+  "email_notifications": {
+    "no_alert_for_skipped_runs": false
+  },
+  "webhook_notifications": {},
+  "timeout_seconds": 0,
+  "max_concurrent_runs": 1,
+  "tasks": [
+    {
+      "task_key": "Device_ID_Reference",
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/generate_device_id_reference.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    },
+    {
+      "task_key": "Bronze_Device_SDK",
+      "depends_on": [
+        {
+          "task_key": "Device_ID_Reference"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/generate_bronze_device_sdk.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    },
+    {
+      "task_key": "Bronze_Transactions",
+      "depends_on": [
+        {
+          "task_key": "Device_ID_Reference"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/generate_bronze_app_transactions.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    },
+    {
+      "task_key": "Silver_Device_SDK",
+      "depends_on": [
+        {
+          "task_key": "Bronze_Device_SDK"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/generate_silver_device_sdk.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    },
+    {
+      "task_key": "Silver_Transactions",
+      "depends_on": [
+        {
+          "task_key": "Bronze_Transactions"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/generate_silver_app_transactions.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    },
+    {
+      "task_key": "Gold_Transactions",
+      "depends_on": [
+        {
+          "task_key": "Silver_Transactions"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/generate_gold_app_transactions.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    },
+    {
+      "task_key": "Risk_Engine",
+      "depends_on": [
+        {
+          "task_key": "Gold_Transactions"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/risk_engine.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    },
+    {
+      "task_key": "analyst_simulation",
+      "depends_on": [
+        {
+          "task_key": "Risk_Engine"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/run_analyst_simulation.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    }
+  ],
+  "queue": {
+    "enabled": true
+  },
+  "environments": [
+    {
+      "environment_key": "Default",
+      "spec": {
+        "environment_version": "4"
+      }
+    },
+    {
+      "environment_key": "fraud_data_pipeline_environment",
+      "spec": {
+        "dependencies": [
+          "-r /Workspace/Repos/<user>/<repo>/requirements.txt"
+        ],
+        "environment_version": "4"
+      }
+    }
+  ],
+  "performance_target": "PERFORMANCE_OPTIMIZED"
+}
