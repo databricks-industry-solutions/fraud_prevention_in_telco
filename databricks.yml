@@ -208,7 +208,7 @@ resources:
           group_name: "users"
 
   dashboards:
-    fraud_detection:
+    fraud_detection_dashboard:
       display_name: "Fraud Detection"
       file_path: "./dashboards/fraud_detection.lvdash.json"
       warehouse_id: "${var.warehouse_id}"
