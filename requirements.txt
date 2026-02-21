@@ -9,3 +9,4 @@ matplotlib>=3.5.0
 seaborn>=0.11.0
 hdbscan>=0.8.0
 faker>=18.0.0
+shapely>=2.0.0

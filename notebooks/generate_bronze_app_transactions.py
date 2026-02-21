@@ -6,15 +6,28 @@ Creates raw transaction data wrapped in JSON format.
 """
 
 import argparse
-import pandas as pd
-import numpy as np
 import json
-from datetime import datetime, timedelta
+import os
 import random
+import sys
+from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
+
+import numpy as np
+import pandas as pd
+from faker import Faker
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-from faker import Faker
+
+# Ensure notebooks dir is on path for geo_utils when run from repo root
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+if _script_dir not in sys.path:
+    sys.path.insert(0, _script_dir)
+try:
+    from geo_utils import get_state_polygons_cached, random_point_in_geometry
+except ImportError:
+    get_state_polygons_cached = random_point_in_geometry = None  # type: ignore[misc, assignment]
+
 spark = SparkSession.getActiveSession()
 
 class BronzeAppTransactionsGenerator:
@@ -405,7 +418,46 @@ class BronzeAppTransactionsGenerator:
                 {'lat': 44.4750, 'lon': -110.7347, 'timezone': 'America/Denver', 'weight': 0.15},
             ],
         }
-        
+
+        # State bounding boxes (min_lat, max_lat, min_lon, max_lon) for random/rural spread
+        self.state_bbox = {
+            'AL': (30.2, 35.0, -88.5, -84.9), 'AK': (51.2, 71.4, -179.1, -129.9),
+            'AZ': (31.3, 37.0, -114.8, -109.0), 'AR': (33.0, 36.5, -94.6, -89.6),
+            'CA': (32.5, 42.0, -124.4, -114.1), 'CO': (37.0, 41.0, -109.1, -102.0),
+            'CT': (40.98, 42.05, -73.73, -71.79), 'DE': (38.45, 39.84, -75.79, -75.05),
+            'DC': (38.79, 39.0, -77.12, -76.91), 'FL': (24.5, 31.0, -87.6, -80.0),
+            'GA': (30.4, 35.0, -85.6, -80.8), 'HI': (18.9, 22.24, -160.3, -154.8),
+            'ID': (42.0, 49.0, -117.2, -111.0), 'IL': (37.0, 42.5, -91.5, -87.5),
+            'IN': (37.8, 41.8, -88.1, -84.8), 'IA': (40.4, 43.5, -96.6, -90.1),
+            'KS': (37.0, 40.0, -102.1, -94.6), 'KY': (36.5, 39.1, -89.6, -82.0),
+            'LA': (29.0, 33.0, -94.0, -89.0), 'ME': (43.1, 47.5, -71.1, -66.9),
+            'MD': (37.9, 39.7, -79.5, -75.0), 'MA': (41.2, 42.9, -73.5, -69.9),
+            'MI': (41.7, 48.2, -90.4, -82.4), 'MN': (43.5, 49.4, -97.2, -89.5),
+            'MS': (30.2, 35.0, -91.7, -88.1), 'MO': (36.0, 40.6, -95.8, -89.1),
+            'MT': (45.0, 49.0, -116.1, -104.0), 'NE': (40.0, 43.0, -104.1, -95.3),
+            'NV': (35.0, 42.0, -120.0, -114.0), 'NH': (42.7, 45.3, -72.6, -70.7),
+            'NJ': (38.9, 41.4, -75.6, -73.9), 'NM': (31.3, 37.0, -109.1, -103.0),
+            'NY': (40.5, 45.0, -79.8, -71.9), 'NC': (33.8, 36.6, -84.3, -75.5),
+            'ND': (45.9, 49.0, -104.1, -96.6), 'OH': (38.4, 42.0, -84.8, -80.5),
+            'OK': (33.6, 37.0, -103.0, -94.4), 'OR': (42.0, 46.3, -124.6, -116.5),
+            'PA': (39.7, 42.3, -80.5, -74.7), 'RI': (41.1, 42.0, -71.9, -71.1),
+            'SC': (32.0, 35.2, -83.4, -78.5), 'SD': (42.5, 46.0, -104.1, -96.4),
+            'TN': (35.0, 37.0, -90.3, -81.6), 'TX': (25.8, 36.5, -106.7, -93.5),
+            'UT': (37.0, 42.0, -114.1, -109.0), 'VT': (42.7, 45.0, -73.4, -71.5),
+            'VA': (36.5, 39.5, -83.7, -75.2), 'WA': (45.5, 49.0, -124.8, -116.9),
+            'WV': (37.2, 40.6, -82.6, -77.7), 'WI': (42.5, 47.1, -92.9, -86.8),
+            'WY': (41.0, 45.0, -111.1, -104.1),
+        }
+        # ~25% rural / 75% city-centered to approximate US population (majority urban)
+        self.rural_fraction = 0.25
+        # State polygons (land borders); fallback to bbox if unavailable
+        self.state_polygons = {}
+        if get_state_polygons_cached is not None and random_point_in_geometry is not None:
+            try:
+                self.state_polygons = get_state_polygons_cached()
+            except Exception as e:
+                print(f"Warning: could not load state polygons ({e}), using bounding boxes for rural spread")
+
         # Risk thresholds
         self.risk_thresholds = {
             'high_value_amount': 1000,
@@ -664,7 +716,7 @@ class BronzeAppTransactionsGenerator:
         return data
     
     def _generate_geographic_data(self, states: List[str]) -> Dict:
-        """Generate geographic location data aligned to selected states."""
+        """Generate geographic location data: mix of city-centered and random points within state (rural spread)."""
         lats = []
         lons = []
         timezones = []
@@ -672,11 +724,33 @@ class BronzeAppTransactionsGenerator:
             cities = self.state_city_distribution.get(state)
             if not cities:
                 cities = [{'lat': 39.8283, 'lon': -98.5795, 'timezone': 'America/Chicago', 'weight': 1.0}]
-            weights = [city.get('weight', 1.0) for city in cities]
-            city_choice = random.choices(cities, weights=weights)[0]
-            lats.append(city_choice['lat'] + random.uniform(-0.05, 0.05))
-            lons.append(city_choice['lon'] + random.uniform(-0.05, 0.05))
-            timezones.append(city_choice['timezone'])
+            # Timezone from state (use first city's timezone when we draw random point)
+            tz = cities[0]['timezone']
+            if random.random() < self.rural_fraction:
+                # Random point within state (polygon = land border, else bbox fallback)
+                geom = self.state_polygons.get(state)
+                if geom is not None and random_point_in_geometry is not None:
+                    lat, lon = random_point_in_geometry(geom, rng=random)
+                else:
+                    bbox = self.state_bbox.get(state)
+                    if bbox:
+                        min_lat, max_lat, min_lon, max_lon = bbox
+                        lat = random.uniform(min_lat, max_lat)
+                        lon = random.uniform(min_lon, max_lon)
+                    else:
+                        city_choice = random.choices(cities, weights=[c.get('weight', 1.0) for c in cities])[0]
+                        lat = city_choice['lat'] + random.uniform(-0.5, 0.5)
+                        lon = city_choice['lon'] + random.uniform(-0.5, 0.5)
+                lats.append(lat)
+                lons.append(lon)
+            else:
+                # City-centered (original behavior)
+                weights = [city.get('weight', 1.0) for city in cities]
+                city_choice = random.choices(cities, weights=weights)[0]
+                lats.append(city_choice['lat'] + random.uniform(-0.05, 0.05))
+                lons.append(city_choice['lon'] + random.uniform(-0.05, 0.05))
+                tz = city_choice['timezone']
+            timezones.append(tz)
         return {
             'lat': lats,
             'lon': lons,
