@@ -17,8 +17,12 @@ import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 
-# Ensure notebooks dir is on path for geo_utils when run from repo root
-_script_dir = os.path.dirname(os.path.abspath(__file__))
+# Ensure notebooks dir is on path for geo_utils when run from repo root.
+# __file__ is not defined when code is run via exec() (e.g. Databricks notebook/bundle).
+try:
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    _script_dir = os.getcwd()
 if _script_dir not in sys.path:
     sys.path.insert(0, _script_dir)
 try:
