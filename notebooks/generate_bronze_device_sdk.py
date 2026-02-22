@@ -6,13 +6,30 @@ Creates raw device profiling data wrapped in JSON format.
 """
 
 import argparse
-import pandas as pd
-import numpy as np
-import random
-from datetime import datetime, timedelta
 import json
+import os
+import random
+import sys
+from datetime import datetime, timedelta
+
+import numpy as np
+import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
+
+# Ensure notebooks dir is on path for geo_utils when run from repo root.
+# __file__ is not defined when code is run via exec() (e.g. Databricks notebook/bundle).
+try:
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    _script_dir = os.getcwd()
+if _script_dir not in sys.path:
+    sys.path.insert(0, _script_dir)
+try:
+    from geo_utils import get_state_polygons_cached, random_point_in_geometry
+except ImportError:
+    get_state_polygons_cached = random_point_in_geometry = None  # type: ignore[misc, assignment]
+
 spark = SparkSession.getActiveSession()
 
 class BronzeDeviceSDKGenerator:
@@ -43,7 +60,78 @@ class BronzeDeviceSDKGenerator:
         
         # Define realistic value ranges for telecom devices
         self.device_configs = self._initialize_device_configs()
-        
+        # US state-based location spread (rural and random points within states)
+        self._init_us_state_geo()
+
+    def _init_us_state_geo(self):
+        """Initialize US state weights and bounding boxes for geographic spread."""
+        self.state_weights = {
+            'CA': 0.12, 'TX': 0.09, 'FL': 0.07, 'NY': 0.06, 'PA': 0.04,
+            'IL': 0.04, 'OH': 0.04, 'GA': 0.03, 'NC': 0.03, 'MI': 0.03,
+            'NJ': 0.03, 'VA': 0.03, 'WA': 0.02, 'AZ': 0.02, 'MA': 0.02,
+            'TN': 0.02, 'IN': 0.02, 'MO': 0.02, 'MD': 0.02, 'WI': 0.02,
+            'CO': 0.02, 'MN': 0.02, 'SC': 0.02, 'AL': 0.02, 'LA': 0.02,
+            'KY': 0.01, 'OR': 0.01, 'OK': 0.01, 'CT': 0.01, 'UT': 0.01,
+            'IA': 0.01, 'NV': 0.01, 'AR': 0.01, 'MS': 0.01, 'KS': 0.01,
+            'NM': 0.01, 'NE': 0.01, 'WV': 0.01, 'ID': 0.01, 'HI': 0.01,
+            'NH': 0.01, 'ME': 0.01, 'RI': 0.01, 'MT': 0.01, 'DE': 0.01,
+            'SD': 0.01, 'ND': 0.01, 'AK': 0.01, 'VT': 0.01, 'WY': 0.01,
+            'DC': 0.01
+        }
+        self.state_bbox = {
+            'AL': (30.2, 35.0, -88.5, -84.9), 'AK': (51.2, 71.4, -179.1, -129.9),
+            'AZ': (31.3, 37.0, -114.8, -109.0), 'AR': (33.0, 36.5, -94.6, -89.6),
+            'CA': (32.5, 42.0, -124.4, -114.1), 'CO': (37.0, 41.0, -109.1, -102.0),
+            'CT': (40.98, 42.05, -73.73, -71.79), 'DE': (38.45, 39.84, -75.79, -75.05),
+            'DC': (38.79, 39.0, -77.12, -76.91), 'FL': (24.5, 31.0, -87.6, -80.0),
+            'GA': (30.4, 35.0, -85.6, -80.8), 'HI': (18.9, 22.24, -160.3, -154.8),
+            'ID': (42.0, 49.0, -117.2, -111.0), 'IL': (37.0, 42.5, -91.5, -87.5),
+            'IN': (37.8, 41.8, -88.1, -84.8), 'IA': (40.4, 43.5, -96.6, -90.1),
+            'KS': (37.0, 40.0, -102.1, -94.6), 'KY': (36.5, 39.1, -89.6, -82.0),
+            'LA': (29.0, 33.0, -94.0, -89.0), 'ME': (43.1, 47.5, -71.1, -66.9),
+            'MD': (37.9, 39.7, -79.5, -75.0), 'MA': (41.2, 42.9, -73.5, -69.9),
+            'MI': (41.7, 48.2, -90.4, -82.4), 'MN': (43.5, 49.4, -97.2, -89.5),
+            'MS': (30.2, 35.0, -91.7, -88.1), 'MO': (36.0, 40.6, -95.8, -89.1),
+            'MT': (45.0, 49.0, -116.1, -104.0), 'NE': (40.0, 43.0, -104.1, -95.3),
+            'NV': (35.0, 42.0, -120.0, -114.0), 'NH': (42.7, 45.3, -72.6, -70.7),
+            'NJ': (38.9, 41.4, -75.6, -73.9), 'NM': (31.3, 37.0, -109.1, -103.0),
+            'NY': (40.5, 45.0, -79.8, -71.9), 'NC': (33.8, 36.6, -84.3, -75.5),
+            'ND': (45.9, 49.0, -104.1, -96.6), 'OH': (38.4, 42.0, -84.8, -80.5),
+            'OK': (33.6, 37.0, -103.0, -94.4), 'OR': (42.0, 46.3, -124.6, -116.5),
+            'PA': (39.7, 42.3, -80.5, -74.7), 'RI': (41.1, 42.0, -71.9, -71.1),
+            'SC': (32.0, 35.2, -83.4, -78.5), 'SD': (42.5, 46.0, -104.1, -96.4),
+            'TN': (35.0, 37.0, -90.3, -81.6), 'TX': (25.8, 36.5, -106.7, -93.5),
+            'UT': (37.0, 42.0, -114.1, -109.0), 'VT': (42.7, 45.0, -73.4, -71.5),
+            'VA': (36.5, 39.5, -83.7, -75.2), 'WA': (45.5, 49.0, -124.8, -116.9),
+            'WV': (37.2, 40.6, -82.6, -77.7), 'WI': (42.5, 47.1, -92.9, -86.8),
+            'WY': (41.0, 45.0, -111.1, -104.1),
+        }
+        self.state_timezone = {
+            'AL': 'America/Chicago', 'AK': 'America/Anchorage', 'AZ': 'America/Phoenix',
+            'AR': 'America/Chicago', 'CA': 'America/Los_Angeles', 'CO': 'America/Denver',
+            'CT': 'America/New_York', 'DE': 'America/New_York', 'DC': 'America/New_York',
+            'FL': 'America/New_York', 'GA': 'America/New_York', 'HI': 'Pacific/Honolulu',
+            'ID': 'America/Boise', 'IL': 'America/Chicago', 'IN': 'America/Indiana/Indianapolis',
+            'IA': 'America/Chicago', 'KS': 'America/Chicago', 'KY': 'America/New_York',
+            'LA': 'America/Chicago', 'ME': 'America/New_York', 'MD': 'America/New_York',
+            'MA': 'America/New_York', 'MI': 'America/Detroit', 'MN': 'America/Chicago',
+            'MS': 'America/Chicago', 'MO': 'America/Chicago', 'MT': 'America/Denver',
+            'NE': 'America/Chicago', 'NV': 'America/Los_Angeles', 'NH': 'America/New_York',
+            'NJ': 'America/New_York', 'NM': 'America/Denver', 'NY': 'America/New_York',
+            'NC': 'America/New_York', 'ND': 'America/Chicago', 'OH': 'America/New_York',
+            'OK': 'America/Chicago', 'OR': 'America/Los_Angeles', 'PA': 'America/New_York',
+            'RI': 'America/New_York', 'SC': 'America/New_York', 'SD': 'America/Chicago',
+            'TN': 'America/Chicago', 'TX': 'America/Chicago', 'UT': 'America/Denver',
+            'VT': 'America/New_York', 'VA': 'America/New_York', 'WA': 'America/Los_Angeles',
+            'WV': 'America/New_York', 'WI': 'America/Chicago', 'WY': 'America/Denver',
+        }
+        self.state_polygons = {}
+        if get_state_polygons_cached is not None and random_point_in_geometry is not None:
+            try:
+                self.state_polygons = get_state_polygons_cached()
+            except Exception as e:
+                print(f"Warning: could not load state polygons ({e}), using bounding boxes")
+
     def _initialize_device_configs(self):
         """Initialize realistic device configurations"""
         return {
@@ -153,22 +241,6 @@ class BronzeDeviceSDKGenerator:
             # Languages
             'language_options': ['en', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ko'],
             'language_weights': [0.4, 0.1, 0.08, 0.08, 0.06, 0.06, 0.05, 0.08, 0.05, 0.04],
-            
-            # Geographic coordinates (major cities)
-            'geo_coordinates': [
-                (40.7128, -74.0060),  # New York
-                (34.0522, -118.2437), # Los Angeles
-                (41.8781, -87.6298),  # Chicago
-                (39.7392, -104.9903), # Denver
-                (51.5074, -0.1278),   # London
-                (48.8566, 2.3522),    # Paris
-                (52.5200, 13.4050),   # Berlin
-                (35.6762, 139.6503),  # Tokyo
-                (31.2304, 121.4737),  # Shanghai
-                (37.5665, 126.9780),  # Seoul
-                (-33.8688, 151.2093)  # Sydney
-            ],
-            'geo_weights': [0.15, 0.12, 0.1, 0.08, 0.1, 0.08, 0.08, 0.1, 0.08, 0.08, 0.03]
         }
 
     def _resolve_datetime(self, value: str | datetime) -> datetime:
@@ -191,11 +263,20 @@ class BronzeDeviceSDKGenerator:
                 seconds=random.randint(0, 59)
             )
         
-        # Generate geographic location
-        geo_idx = np.random.choice(len(config['geo_coordinates']), p=config['geo_weights'])
-        lat, lon = config['geo_coordinates'][geo_idx]
-        lat += np.random.normal(0, 0.01)
-        lon += np.random.normal(0, 0.01)
+        # Generate geographic location: random point within US state (polygon = land border, else bbox)
+        state = random.choices(
+            list(self.state_weights.keys()),
+            weights=list(self.state_weights.values()),
+            k=1
+        )[0]
+        geom = self.state_polygons.get(state)
+        if geom is not None and random_point_in_geometry is not None:
+            lat, lon = random_point_in_geometry(geom, rng=random)
+        else:
+            bbox = self.state_bbox[state]
+            min_lat, max_lat, min_lon, max_lon = bbox
+            lat = random.uniform(min_lat, max_lat)
+            lon = random.uniform(min_lon, max_lon)
         
         # Generate language
         lang = np.random.choice(config['language_options'], p=config['language_weights'])
@@ -245,7 +326,7 @@ class BronzeDeviceSDKGenerator:
             
             # Categorical features
             'subscriber_device_density': np.random.choice(config['density_options'], p=config['density_weights']),
-            'subscriber_timezone': np.random.choice(config['timezone_options']),
+            'subscriber_timezone': self.state_timezone[state],
             'subscriber_profile_count': np.random.randint(1, 4),
             'subscriber_managed_profile': np.random.choice([True, False], p=[0.1, 0.9]),
             'subscriber_device_storage': np.random.choice([32, 64, 128, 256, 512], p=[0.1, 0.2, 0.4, 0.2, 0.1]),
