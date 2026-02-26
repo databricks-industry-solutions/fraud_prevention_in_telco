@@ -26,6 +26,25 @@
         "  END AS fraud_score_category\n",
         "FROM telecommunications.fraud_data.transaction_risk"
       ]
+    },
+    {
+      "name": "656bb0ef",
+      "displayName": "Analyst Case Summary",
+      "queryLines": [
+        "SELECT \n",
+        "  assigned_analyst,\n",
+        "  transaction_state AS analyst_state,\n",
+        "  SUM(CASE WHEN review_status = 'reviewed' THEN 1 ELSE 0 END) AS reviewed_cases,\n",
+        "  SUM(CASE WHEN review_status = 'escalated' THEN 1 ELSE 0 END) AS escalated_cases,\n",
+        "  SUM(CASE WHEN review_status = 'pending_review' THEN 1 ELSE 0 END) AS pending_cases,\n",
+        "  COUNT(*) AS total_cases\n",
+        "FROM transaction_risk\n",
+        "WHERE fraud_score >= 70 AND fraud_score < 95\n",
+        "GROUP BY assigned_analyst, analyst_state\n",
+        "ORDER BY total_cases DESC"
+      ],
+      "catalog": "telecommunications",
+      "schema": "fraud_data"
     }
   ],
   "pages": [
@@ -33,6 +52,22 @@
       "name": "0c3f1310",
       "displayName": "Overview",
       "layout": [
+        {
+          "widget": {
+            "name": "risk-engine-explainer",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:14px;line-height:1.4;display:block\"><strong>Risk engine</strong> scores each transaction (0–100) from <strong>transaction</strong>, <strong>device</strong>, and <strong>network</strong> data. Score ≥95 → <strong>blocked</strong>; 70–95 → <strong>flagged</strong> for analyst review; &lt;70 → passed.<br/><br/><strong>Transaction</strong> (e.g. SIM swap, high value, MFA): SIM swap detected (20 pts), high-value device/service purchase (12 pts), recent login failure burst (12 pts).<br/><strong>Device</strong> (SDK): VPN active/connected (+6 pts each), unencrypted device (10 pts), emulator / \"SDK built for x86\" (12 pts).<br/><strong>Network</strong> (CDR/cell): Impossible travel (e.g. &gt;250 km/h between cells), cell country ≠ IP country, rapid cell hop (&gt;50 km in &lt;5 min), roaming anomaly (multiple countries in short window).</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 3
+          }
+        },
         {
           "widget": {
             "name": "cases-in-pipeline",
@@ -72,7 +107,7 @@
           },
           "position": {
             "x": 0,
-            "y": 17,
+            "y": 20,
             "width": 2,
             "height": 2
           }
@@ -148,7 +183,7 @@
           },
           "position": {
             "x": 6,
-            "y": 19,
+            "y": 22,
             "width": 6,
             "height": 6
           }
@@ -195,7 +230,7 @@
           },
           "position": {
             "x": 4,
-            "y": 1,
+            "y": 4,
             "width": 2,
             "height": 2
           }
@@ -229,6 +264,9 @@
                   "filters": [
                     {
                       "expression": "IN_RANGE(`fraud_score`, 70D, 95D)"
+                    },
+                    {
+                      "expression": "IN_RANGE(`transaction_date`, PARSE_RELATIVE_DATE('now-7d/d', 'FLOOR'), PARSE_RELATIVE_DATE('now/d', 'CEIL'))"
                     }
                   ],
                   "disaggregated": false
@@ -237,36 +275,10 @@
             ],
             "spec": {
               "version": 3,
-              "widgetType": "area",
-              "encodings": {
-                "x": {
-                  "fieldName": "daily(transaction_date)",
-                  "scale": {
-                    "type": "temporal"
-                  }
-                },
-                "y": {
-                  "fieldName": "count(*)",
-                  "scale": {
-                    "type": "quantitative"
-                  }
-                },
-                "color": {
-                  "fieldName": "transaction_type",
-                  "scale": {
-                    "type": "categorical"
-                  }
-                },
-                "extra": [
-                  {
-                    "fieldName": "sum(case_exposure_usd)"
-                  }
-                ]
-              },
               "frame": {
                 "showTitle": true,
                 "showDescription": false,
-                "title": "Pipeline cases over time"
+                "title": "Pipeline cases over last 7 days"
               },
               "mark": {
                 "colors": [
@@ -311,12 +323,38 @@
                     "position": 10
                   }
                 ]
+              },
+              "widgetType": "area",
+              "encodings": {
+                "x": {
+                  "fieldName": "daily(transaction_date)",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "count(*)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "color": {
+                  "fieldName": "transaction_type",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "extra": [
+                  {
+                    "fieldName": "sum(case_exposure_usd)"
+                  }
+                ]
               }
             }
           },
           "position": {
             "x": 0,
-            "y": 25,
+            "y": 28,
             "width": 6,
             "height": 6
           }
@@ -381,7 +419,7 @@
           },
           "position": {
             "x": 6,
-            "y": 25,
+            "y": 28,
             "width": 6,
             "height": 6
           }
@@ -391,13 +429,13 @@
             "name": "d1373250",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size: 24px;\">Auto block engine: p(fraud)>95%  -> Auto block block </span></span>"
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Auto block engine: if </span><span style=\"font-size:24px\">**p(fraud)>95%**</span><span style=\"font-size:24px\">  -> block transaction</span></span>"
               ]
             }
           },
           "position": {
             "x": 0,
-            "y": 0,
+            "y": 3,
             "width": 12,
             "height": 1
           }
@@ -449,7 +487,7 @@
           },
           "position": {
             "x": 2,
-            "y": 1,
+            "y": 4,
             "width": 2,
             "height": 2
           }
@@ -493,7 +531,7 @@
           },
           "position": {
             "x": 0,
-            "y": 1,
+            "y": 4,
             "width": 2,
             "height": 2
           }
@@ -503,13 +541,13 @@
             "name": "0f6a0bd7",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Pipeline</span><span style=\"font-size:24px\"> 70%<p(fraud)<95%  -> Assign to analyst</span></span>"
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Pipeline</span><span style=\"font-size:24px\"> </span><span style=\"font-size:24px\">**70%<p(fraud)<95%**</span><span style=\"font-size:24px\">  -> Assign to analyst</span></span>"
               ]
             }
           },
           "position": {
             "x": 0,
-            "y": 16,
+            "y": 19,
             "width": 12,
             "height": 1
           }
@@ -579,7 +617,7 @@
           },
           "position": {
             "x": 6,
-            "y": 4,
+            "y": 7,
             "width": 6,
             "height": 6
           }
@@ -631,7 +669,7 @@
           },
           "position": {
             "x": 6,
-            "y": 1,
+            "y": 4,
             "width": 2,
             "height": 2
           }
@@ -678,7 +716,7 @@
           },
           "position": {
             "x": 8,
-            "y": 1,
+            "y": 4,
             "width": 2,
             "height": 2
           }
@@ -731,7 +769,7 @@
           },
           "position": {
             "x": 10,
-            "y": 1,
+            "y": 4,
             "width": 2,
             "height": 2
           }
@@ -778,7 +816,7 @@
           },
           "position": {
             "x": 2,
-            "y": 17,
+            "y": 20,
             "width": 2,
             "height": 2
           }
@@ -825,7 +863,7 @@
           },
           "position": {
             "x": 4,
-            "y": 17,
+            "y": 20,
             "width": 2,
             "height": 2
           }
@@ -872,7 +910,7 @@
           },
           "position": {
             "x": 6,
-            "y": 17,
+            "y": 20,
             "width": 2,
             "height": 2
           }
@@ -935,7 +973,7 @@
           },
           "position": {
             "x": 6,
-            "y": 10,
+            "y": 13,
             "width": 6,
             "height": 6
           }
@@ -992,7 +1030,7 @@
           },
           "position": {
             "x": 0,
-            "y": 3,
+            "y": 6,
             "width": 6,
             "height": 13
           }
@@ -1054,7 +1092,7 @@
           },
           "position": {
             "x": 0,
-            "y": 19,
+            "y": 22,
             "width": 6,
             "height": 6
           }
@@ -1070,7 +1108,7 @@
           },
           "position": {
             "x": 6,
-            "y": 3,
+            "y": 6,
             "width": 6,
             "height": 1
           }
@@ -1081,7 +1119,7 @@
     },
     {
       "name": "dd6a32e3",
-      "displayName": "auto blocked cases",
+      "displayName": "Auto blocked cases",
       "layout": [
         {
           "widget": {
@@ -1701,7 +1739,7 @@
           },
           "position": {
             "x": 0,
-            "y": 0,
+            "y": 1,
             "width": 12,
             "height": 6
           }
@@ -1816,9 +1854,267 @@
           },
           "position": {
             "x": 0,
-            "y": 6,
+            "y": 7,
             "width": 12,
             "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "0641d0fd",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "656bb0ef",
+                  "fields": [
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "reviewed_cases",
+                      "expression": "`reviewed_cases`"
+                    },
+                    {
+                      "name": "escalated_cases",
+                      "expression": "`escalated_cases`"
+                    },
+                    {
+                      "name": "pending_cases",
+                      "expression": "`pending_cases`"
+                    },
+                    {
+                      "name": "total_cases",
+                      "expression": "`total_cases`"
+                    },
+                    {
+                      "name": "analyst_state",
+                      "expression": "`analyst_state`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Analyst Case Summary",
+                "showTitle": true
+              },
+              "rowsPerPage": 25,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "assigned_analyst",
+                    "displayName": "Assigned Analyst"
+                  },
+                  {
+                    "fieldName": "reviewed_cases",
+                    "displayName": "Reviewed"
+                  },
+                  {
+                    "fieldName": "escalated_cases",
+                    "displayName": "Escalated"
+                  },
+                  {
+                    "fieldName": "pending_cases",
+                    "displayName": "Pending"
+                  },
+                  {
+                    "fieldName": "total_cases",
+                    "displayName": "Total Cases"
+                  },
+                  {
+                    "fieldName": "analyst_state"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 13,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "filter-by-analysts",
+            "queries": [
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112d55f2f15b6b610c403e8ededd3_assigned_analyst",
+                "query": {
+                  "datasetName": "656bb0ef",
+                  "fields": [
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "assigned_analyst_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112aa697414aea341548e50c742e1_assigned_analyst",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "assigned_analyst_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112aa697414d68c91e0eca0dda013_assigned_analyst",
+                "query": {
+                  "datasetName": "99313fb4",
+                  "fields": [
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "assigned_analyst_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "filter by analysts"
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "assigned_analyst",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112d55f2f15b6b610c403e8ededd3_assigned_analyst"
+                  },
+                  {
+                    "fieldName": "assigned_analyst",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112aa697414aea341548e50c742e1_assigned_analyst"
+                  },
+                  {
+                    "fieldName": "assigned_analyst",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112aa697414d68c91e0eca0dda013_assigned_analyst"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 5,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "filter-by-state",
+            "queries": [
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112aa697414aea341548e50c742e1_transaction_state",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "transaction_state",
+                      "expression": "`transaction_state`"
+                    },
+                    {
+                      "name": "transaction_state_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112aa697414d68c91e0eca0dda013_transaction_region",
+                "query": {
+                  "datasetName": "99313fb4",
+                  "fields": [
+                    {
+                      "name": "transaction_region",
+                      "expression": "`transaction_region`"
+                    },
+                    {
+                      "name": "transaction_region_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112d55f2f15b6b610c403e8ededd3_analyst_state",
+                "query": {
+                  "datasetName": "656bb0ef",
+                  "fields": [
+                    {
+                      "name": "analyst_state",
+                      "expression": "`analyst_state`"
+                    },
+                    {
+                      "name": "analyst_state_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "filter by state"
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "transaction_state",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112aa697414aea341548e50c742e1_transaction_state"
+                  },
+                  {
+                    "fieldName": "transaction_region",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112aa697414d68c91e0eca0dda013_transaction_region"
+                  },
+                  {
+                    "fieldName": "analyst_state",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f112d55f2f15b6b610c403e8ededd3_analyst_state"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 0,
+            "width": 4,
+            "height": 1
           }
         }
       ],
@@ -1827,7 +2123,7 @@
     },
     {
       "name": "9bcc1c69",
-      "displayName": "lost cases",
+      "displayName": "Lost cases",
       "layout": [
         {
           "widget": {
