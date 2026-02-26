@@ -18,8 +18,13 @@ Comprehensive documentation for the Telecom Fraud Detection Data Pipeline implem
 
 ```mermaid
 graph TD
-    IDREF[Device ID Reference] --> D_RAW[Raw Device SDK]
+    IDREF[Device ID Reference] --> CELL[Cell Registry]
+    IDREF --> D_RAW[Raw Device SDK]
     IDREF --> T_RAW[Raw App Transactions]
+    CELL --> N_RAW[Raw Network Data]
+    N_RAW --> N_BRONZE[Bronze Network Data]
+    N_BRONZE --> N_SILVER[Silver Network Data]
+    N_SILVER --> N_GOLD[Gold Network Data]
     D_RAW --> D_BRONZE[Bronze Device SDK]
     T_RAW --> T_BRONZE[Bronze Transactions]
 
@@ -33,6 +38,7 @@ graph TD
     subgraph "Risk Baseline"
         T_GOLD -->|Score + Engine Labels| RISK_ENGINE[transaction_risk_engine]
         D_GOLD -->|Join on device_id| RISK_ENGINE
+        N_GOLD -->|Join on device_id + network rules| RISK_ENGINE
     end
 
     subgraph "Analyst Review"
@@ -47,13 +53,16 @@ graph TD
 ### Pipeline Stages
 
 0. **Device ID Reference**: Generate master list of device IDs (no dependencies)
-1. **Raw Device SDK Generation**: `generate_raw_device_sdk.main()` generates raw device profiles and writes JSON Lines (NDJSON) to `/Volumes/{catalog}/{schema}/raw_device_sdk/`, partitioned by yyyy/mm/dd
-2. **Device SDK Bronze Ingestion**: `generate_bronze_device_sdk.main()` reads from the raw volume and creates the bronze layer, then silver unwraps
-3. **Raw Transaction Generation**: `generate_raw_app_transactions.main()` generates raw unstructured data and writes JSON Lines (NDJSON) to `/Volumes/{catalog}/{schema}/raw_app_transactions/`, partitioned by yyyy/mm/dd
-4. **Transaction Bronze Ingestion**: `generate_bronze_app_transactions.main()` reads from the raw volume and creates the bronze layer, followed by silver → gold
-5. **Risk Baseline**: `risk_engine.main()` loads both `gold_app_transactions` and `gold_device_sdk`, joins on `subscriber_device_id`, scores using transaction and device risk features, and stores engine outputs (including `risk_reason_engine`) in `transaction_risk_engine`
-6. **Analyst Review**: `run_analyst_simulation.main()` simulates human review, producing `analyst_review` and the final `transaction_risk` table
-7. **Validation**: Confirms shared device IDs between pipelines
+1. **Cell Registry**: `generate_cell_registry.main()` creates synthetic base station/cell lookup (lac, cell_id, bs_lat, bs_lon, coverage, country/region/city) for network geo resolution
+2. **Raw Device SDK Generation**: `generate_raw_device_sdk.main()` generates raw device profiles and writes JSON Lines (NDJSON) to `/Volumes/{catalog}/{schema}/raw_device_sdk/`, partitioned by yyyy/mm/dd
+3. **Device SDK Bronze Ingestion**: `generate_bronze_device_sdk.main()` reads from the raw volume and creates the bronze layer; silver unwraps
+4. **Raw Transaction Generation**: `generate_raw_app_transactions.main()` generates raw unstructured data and writes JSON Lines (NDJSON) to `/Volumes/{catalog}/{schema}/raw_app_transactions/`, partitioned by yyyy/mm/dd
+5. **Transaction Bronze Ingestion**: `generate_bronze_app_transactions.main()` reads from the raw volume and creates the bronze layer, followed by silver → gold
+6. **Raw Network Data Generation**: `generate_raw_network_data.main()` generates CDR-like network events (uses device_id_reference and cell_registry), writes to `/Volumes/{catalog}/{schema}/raw_network_data/`, partitioned by yyyy/mm/dd
+7. **Network Bronze/Silver/Gold**: `generate_bronze_network_data.main()` ingests from Volume; `generate_silver_network_data.main()` unpacks report and joins cell_registry for geo; `generate_gold_network_data.main()` produces risk-ready `gold_network_data`
+8. **Risk Baseline**: `risk_engine.main()` loads `gold_app_transactions`, `gold_device_sdk`, and `gold_network_data`; joins on `subscriber_device_id`; computes network rule features (impossible travel, cell–IP mismatch, rapid cell hop, roaming anomaly); scores using transaction, device, and network rules; stores engine outputs in `transaction_risk_engine`
+9. **Analyst Review**: `run_analyst_simulation.main()` simulates human review, producing `analyst_review` and the final `transaction_risk` table
+10. **Validation**: Confirms shared device IDs between pipelines
 
 ---
 
@@ -73,10 +82,12 @@ The pipeline implements a **medallion architecture** with progressive data refin
 **Tables**:
 - `bronze_device_sdk`: Raw device profiles (ingested from Volume)
 - `bronze_app_transactions`: Raw transaction events (ingested from Volume)
+- `bronze_network_data`: Raw network (CDR-like) events; key columns + report JSON (ingested from Volume)
 
 **Volumes** (Raw Unstructured Data):
 - `/Volumes/{catalog}/{schema}/raw_device_sdk/`: JSON Lines (NDJSON) device profiles, partitioned by yyyy/mm/dd
 - `/Volumes/{catalog}/{schema}/raw_app_transactions/`: JSON Lines (NDJSON) transactions, partitioned by yyyy/mm/dd
+- `/Volumes/{catalog}/{schema}/raw_network_data/`: JSON Lines (NDJSON) CDR-like network events, partitioned by yyyy/mm/dd
 
 ### Silver Layer
 **Purpose**: Cleaned data with risk features and business transformations
@@ -91,6 +102,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 **Tables**:
 - `silver_device_sdk`: Cleaned device data (50+ attributes)
 - `silver_app_transactions`: Cleaned transactions with risk features
+- `silver_network_data`: Cleaned network events with cell→geo join (geo_lat_est, geo_lon_est, geo_country/region/city from cell_registry)
 
 ### Gold Layer
 **Purpose**: Business-ready data optimized for analytics and risk scoring
@@ -105,6 +117,10 @@ The pipeline implements a **medallion architecture** with progressive data refin
 **Tables**:
 - `gold_app_transactions`: Business-ready transaction data
 - `gold_device_sdk`: Business-ready device data (one row per device); used by the risk engine for device-based risk signals
+- `gold_network_data`: Business-ready network (CDR-like) events; used by the risk engine for network rules (impossible travel, cell–IP mismatch, rapid cell hop, roaming)
+
+**Reference Tables**:
+- `cell_registry`: Base station/cell lookup (cell_id, lac, bs_lat, bs_lon, nominal_radius_m, env_type, country, region, city) for resolving network event location
 
 ### Risk Layer
 **Purpose**: Independent fraud scoring and case management
@@ -136,7 +152,26 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 2. bronze_device_sdk
+### 2. cell_registry
+**Purpose**: Base station / cell lookup for network pipeline geo resolution
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `base_station_id` | string | Logical base station ID |
+| `lac` | int | Location area code |
+| `cell_id` | string | Cell identifier (e.g. cell_NNNNNN) |
+| `sector_id` | string | Sector (alpha/beta/gamma) |
+| `bs_lat`, `bs_lon` | float | Base station coordinates |
+| `sector_azimuth_deg`, `sector_beamwidth_deg` | int | Antenna parameters |
+| `env_type` | string | urban, suburban, rural |
+| `nominal_radius_m` | int | Typical coverage radius (m) |
+| `country`, `region`, `city` | string | Geographic labels |
+
+**Records**: 5,000 (synthetic US cells)
+
+---
+
+### 3. bronze_device_sdk
 **Purpose**: Raw device profiling data
 
 | Column | Type | Description |
@@ -156,7 +191,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 3. silver_device_sdk
+### 4. silver_device_sdk
 **Purpose**: Cleaned device data with unpacked attributes
 
 **Schema**: 50+ columns including:
@@ -175,7 +210,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 4. bronze_app_transactions
+### 5. bronze_app_transactions
 **Purpose**: Raw transaction events
 
 | Column | Type | Description |
@@ -196,7 +231,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 5. silver_app_transactions
+### 6. silver_app_transactions
 **Purpose**: Cleaned transactions with 35+ risk features
 
 **Key Columns**:
@@ -223,7 +258,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 6. gold_app_transactions
+### 7. gold_app_transactions
 **Purpose**: Business-ready transaction data
 
 **Characteristics**:
@@ -237,7 +272,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 7. gold_device_sdk
+### 8. gold_device_sdk
 **Purpose**: Business-ready device data (one row per device) for risk engine and analytics
 
 **Characteristics**:
@@ -251,7 +286,39 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 8. transaction_risk_engine
+### 9. bronze_network_data
+**Purpose**: Raw network (CDR-like) events from Volume
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `event_id` | string | Unique event identifier |
+| `subscriber_device_id` | string | Device (same ID space as device_id_reference) |
+| `timestamp_start` | timestamp | Event start (UTC) |
+| `report` | string (JSON) | Event details (event_type, cell_id, geo, a/b party, billing, etc.) |
+
+**Records**: ~150,000
+
+---
+
+### 10. silver_network_data
+**Purpose**: Cleaned network events with cell→geo resolution
+
+**Key columns**: event_id, subscriber_device_id, timestamp_start/end, duration_sec, event_type, direction, status, cell_id, lac, base_station_id, geo_est_method, geo_lat_est, geo_lon_est, geo_accuracy_m, geo_country, geo_region, geo_city, a_party_id, b_party_id, home_mno_id, visited_mno_id, radio_access_technology, session_id, device_os, device_model, app_channel, client_ip, ip_geo_country, charge_amount, is_roaming, roaming_zone, etc.
+
+**Records**: ~150,000
+
+---
+
+### 11. gold_network_data
+**Purpose**: Business/risk-ready network events for risk engine
+
+**Characteristics**: Subset of silver columns; one row per event; includes subscriber_device_id for joining to transactions and device SDK. Used by the risk engine to compute per-device network rule flags (impossible travel, cell–IP mismatch, rapid cell hop, roaming anomaly).
+
+**Records**: ~150,000
+
+---
+
+### 12. transaction_risk_engine
 **Purpose**: Engine-generated fraud scoring and case management
 
 **Key Columns**:
@@ -276,7 +343,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 9. analyst_review
+### 13. analyst_review
 **Purpose**: Simulated analyst review outcomes
 
 **Key Columns**:
@@ -292,7 +359,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 10. transaction_risk
+### 14. transaction_risk
 **Purpose**: Final fraud decisions merging engine and analyst outcomes
 
 **Characteristics**:
@@ -339,7 +406,15 @@ The risk engine calculates fraud scores (0-100) based on **12 risk indicators** 
 - **SELinux Disabled** (10 pts): Security module disabled (e.g. rooted)
 - **Emulator** (12 pts): Device model indicates emulator (e.g. "SDK built for x86")
 
-The risk engine joins `gold_app_transactions` with `gold_device_sdk` on `subscriber_device_id` (left join) so transactions without a matching device are still scored; device-based points apply only when device data is present.
+#### Network (CDR) Rule–Based Indicators (from `gold_network_data`)
+Computed per device from CDR-like events; joined to transactions on `subscriber_device_id`:
+- **Impossible Travel High** (15 pts): Consecutive events with distance > 100 km and implied speed > 1,000 km/h (R1)
+- **Impossible Travel Medium** (8 pts): Implied speed between consecutive events > 250 km/h (R2)
+- **Cell vs IP Mismatch** (10 pts): Cell country ≠ IP geolocation country (R5)
+- **Rapid Cell Hop** (12 pts): Consecutive events > 50 km apart with time delta < 5 min (R7)
+- **Roaming Anomaly** (10 pts): Multiple countries in short window while roaming (R13)
+
+The risk engine loads `gold_app_transactions`, `gold_device_sdk`, and `gold_network_data`; joins transaction and device gold on `subscriber_device_id` (left join); computes per-device network rule features from `gold_network_data` and left-joins them to the merged table. Transactions without a matching device or network data are still scored; device and network points apply only when the corresponding data is present.
 
 ### Score Distribution & Labeling
 
@@ -402,63 +477,93 @@ When fraud is detected, the engine generates:
 **Purpose**: Generate master device ID list  
 **Output**: `device_id_reference` table
 
-### Task 2: Raw_Device_SDK
+### Task 2: Cell_Registry
+**Script**: `generate_cell_registry.py`  
+**Dependencies**: Device_ID_Reference  
+**Purpose**: Generate synthetic base station/cell lookup for network geo resolution  
+**Output**: `cell_registry` table
+
+### Task 3: Raw_Device_SDK
 **Script**: `generate_raw_device_sdk.py`  
 **Dependencies**: Device_ID_Reference  
 **Purpose**: Generate raw device profiles and write to Volume as NDJSON  
 **Output**: `/Volumes/{catalog}/{schema}/raw_device_sdk/` (partitioned by date)
 
-### Task 3: Bronze_Device_SDK
+### Task 4: Bronze_Device_SDK
 **Script**: `generate_bronze_device_sdk.py`  
 **Dependencies**: Raw_Device_SDK  
 **Purpose**: Read from Volume and create bronze layer  
 **Output**: `bronze_device_sdk` table
 
-### Task 4: Raw_App_Transactions
+### Task 5: Raw_App_Transactions
 **Script**: `generate_raw_app_transactions.py`  
 **Dependencies**: Device_ID_Reference  
 **Purpose**: Generate raw transaction data and write to Volume as NDJSON  
 **Output**: `/Volumes/{catalog}/{schema}/raw_app_transactions/` (partitioned by date)
 
-### Task 5: Bronze_Transactions
+### Task 6: Bronze_Transactions
 **Script**: `generate_bronze_app_transactions.py`  
 **Dependencies**: Raw_App_Transactions  
 **Purpose**: Read from Volume and create bronze layer  
 **Output**: `bronze_app_transactions` table
 
-### Task 6: Silver_Device_SDK
+### Task 7: Silver_Device_SDK
 **Script**: `generate_silver_device_sdk.py`  
 **Dependencies**: Bronze_Device_SDK  
 **Purpose**: Clean and unpack device data  
 **Output**: `silver_device_sdk` table
 
-### Task 7: Silver_Transactions
-**Script**: `generate_silver_app_transactions.py`  
-**Dependencies**: Bronze_Transactions  
-**Purpose**: Clean transactions and add risk features  
-**Output**: `silver_app_transactions` table
-
-### Task 8: Gold_Transactions
-**Script**: `generate_gold_app_transactions.py`  
-**Dependencies**: Silver_Transactions  
-**Purpose**: Create business-ready transaction data  
-**Output**: `gold_app_transactions` table
-
-### Task 9: Gold_Device_SDK
+### Task 8: Gold_Device_SDK
 **Script**: `generate_gold_device_sdk.py`  
 **Dependencies**: Silver_Device_SDK  
 **Purpose**: Create business-ready device data (one row per device)  
 **Output**: `gold_device_sdk` table
 
-### Task 10: Risk_Engine
+### Task 9: Silver_Transactions
+**Script**: `generate_silver_app_transactions.py`  
+**Dependencies**: Bronze_Transactions  
+**Purpose**: Clean transactions and add risk features  
+**Output**: `silver_app_transactions` table
+
+### Task 10: Gold_Transactions
+**Script**: `generate_gold_app_transactions.py`  
+**Dependencies**: Silver_Transactions  
+**Purpose**: Create business-ready transaction data  
+**Output**: `gold_app_transactions` table
+
+### Task 11: Raw_Network_Data
+**Script**: `generate_raw_network_data.py`  
+**Dependencies**: Cell_Registry  
+**Purpose**: Generate CDR-like network events and write to Volume as NDJSON  
+**Output**: `/Volumes/{catalog}/{schema}/raw_network_data/` (partitioned by date)
+
+### Task 12: Bronze_Network_Data
+**Script**: `generate_bronze_network_data.py`  
+**Dependencies**: Raw_Network_Data  
+**Purpose**: Read from Volume and create bronze network layer  
+**Output**: `bronze_network_data` table
+
+### Task 13: Silver_Network_Data
+**Script**: `generate_silver_network_data.py`  
+**Dependencies**: Bronze_Network_Data  
+**Purpose**: Unpack report, join cell_registry for geo, normalize types  
+**Output**: `silver_network_data` table
+
+### Task 14: Gold_Network_Data
+**Script**: `generate_gold_network_data.py`  
+**Dependencies**: Silver_Network_Data  
+**Purpose**: Create business/risk-ready network data (for risk engine rules)  
+**Output**: `gold_network_data` table
+
+### Task 15: Risk_Engine
 **Script**: `risk_engine.py`  
-**Dependencies**: Gold_Transactions, Gold_Device_SDK  
-**Purpose**: Load both gold tables, join on device ID, calculate fraud scores and labels (transaction + device signals)  
+**Dependencies**: Gold_Transactions, Gold_Device_SDK, Gold_Network_Data  
+**Purpose**: Load all three gold tables, join on device ID, compute network rule features, calculate fraud scores and labels (transaction + device + network rules)  
 **Output**: `transaction_risk_engine` table
 
-### Task 11: analyst_simulation
+### Task 16: analyst_simulation
 **Script**: `run_analyst_simulation.py`  
-**Dependencies**: Risk_Engine    
+**Dependencies**: Risk_Engine  
 **Purpose**: Simulate analyst review workflow  
 **Output**: `analyst_review` and `transaction_risk` tables
 
@@ -473,6 +578,9 @@ From the repo root (blueprint layout: scripts under `notebooks/`):
 ```bash
 # Generate device IDs
 python notebooks/generate_device_id_reference.py --catalog telecommunications --schema fraud_data
+
+# Generate cell registry (for network pipeline)
+python notebooks/generate_cell_registry.py --catalog telecommunications --schema fraud_data
 
 # Generate raw device data (writes to Volume)
 python notebooks/generate_raw_device_sdk.py --catalog telecommunications --schema fraud_data
@@ -498,7 +606,13 @@ python notebooks/generate_gold_app_transactions.py --catalog telecommunications 
 # Create gold device layer (one row per device)
 python notebooks/generate_gold_device_sdk.py --catalog telecommunications --schema fraud_data
 
-# Run risk engine (uses both gold_app_transactions and gold_device_sdk)
+# Network pipeline: raw → bronze → silver → gold
+python notebooks/generate_raw_network_data.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_bronze_network_data.py --catalog telecommunications --schema fraud_data --source volume
+python notebooks/generate_silver_network_data.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_gold_network_data.py --catalog telecommunications --schema fraud_data
+
+# Run risk engine (uses gold_app_transactions, gold_device_sdk, gold_network_data)
 python notebooks/risk_engine.py --catalog telecommunications --schema fraud_data
 
 # Run analyst simulation
@@ -523,12 +637,16 @@ All tables are created in `telecommunications.fraud_data`:
 | Table | Records | Description |
 |-------|---------|-------------|
 | `device_id_reference` | 10,000 | Master list of device IDs |
+| `cell_registry` | 5,000 | Base station/cell lookup for network geo |
 | `bronze_device_sdk` | 10,000 | Raw device profiles with JSON report |
 | `silver_device_sdk` | 10,000 | Cleaned device data (50+ attributes) |
 | `gold_device_sdk` | 10,000 | Business-ready device data (one per device, for risk engine) |
 | `bronze_app_transactions` | 100,000 | Raw transactions with JSON report |
 | `silver_app_transactions` | 100,000 | Cleaned transactions with 35+ risk features |
 | `gold_app_transactions` | 100,000 | Business data with risk features |
+| `bronze_network_data` | ~150,000 | Raw network (CDR-like) events with JSON report |
+| `silver_network_data` | ~150,000 | Cleaned network events with cell geo |
+| `gold_network_data` | ~150,000 | Business/risk-ready network data for risk engine |
 | `transaction_risk_engine` | 100,000 | Engine baseline scores, labels, and statuses |
 | `analyst_review` | varies | Analyst outcomes (review status, notes, FP/FN) |
 | `transaction_risk` | 100,000 | Final fraud decisions merged with analyst outcomes |
@@ -595,6 +713,8 @@ The pipeline runs on Databricks serverless compute with:
 Current configuration:
 - 10,000 devices
 - 100,000 transactions
+- ~150,000 network (CDR-like) events
+- 5,000 synthetic cells (cell_registry)
 - Full date range: 2024-01-01 to present
 
 To scale:
@@ -608,10 +728,11 @@ To scale:
 
 ### Adding New Risk Indicators
 
-1. Update `notebooks/generate_silver_app_transactions.py` to calculate new risk feature
-2. Update `notebooks/risk_engine.py` to incorporate feature in scoring
-3. Document new indicator in this file
-4. Redeploy bundle: `databricks bundle deploy --force`
+1. **Transaction/account features**: Update `notebooks/generate_silver_app_transactions.py` to calculate the feature; add to gold and risk engine scoring.
+2. **Device features**: Add to `gold_device_sdk` (or silver device) and `notebooks/risk_engine.py` scoring and reasons.
+3. **Network rules**: Add rule logic in `notebooks/risk_engine.py` in `compute_network_rule_features()` and in `calculate_fraud_scores()` / `generate_engine_assessment()`.
+4. Document new indicator in this file.
+5. Redeploy bundle: `databricks bundle deploy --force`
 
 ### Modifying Score Thresholds
 
