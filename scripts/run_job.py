@@ -19,6 +19,11 @@ fraud_data_pipeline = Job.from_dict(
         "name": "fraud_data_pipeline",
         "tasks": [
             {"task_key": "Device_ID_Reference", "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_device_id_reference.py"}, "environment_key": "fraud_data_pipeline_environment"},
+            {"task_key": "Cell_Registry", "depends_on": [{"task_key": "Device_ID_Reference"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_cell_registry.py"}, "environment_key": "fraud_data_pipeline_environment"},
+            {"task_key": "Raw_Network_Data", "depends_on": [{"task_key": "Cell_Registry"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_raw_network_data.py"}, "environment_key": "fraud_data_pipeline_environment"},
+            {"task_key": "Bronze_Network_Data", "depends_on": [{"task_key": "Raw_Network_Data"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_bronze_network_data.py"}, "environment_key": "fraud_data_pipeline_environment"},
+            {"task_key": "Silver_Network_Data", "depends_on": [{"task_key": "Bronze_Network_Data"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_silver_network_data.py"}, "environment_key": "fraud_data_pipeline_environment"},
+            {"task_key": "Gold_Network_Data", "depends_on": [{"task_key": "Silver_Network_Data"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_gold_network_data.py"}, "environment_key": "fraud_data_pipeline_environment"},
             {"task_key": "Bronze_Device_SDK", "depends_on": [{"task_key": "Device_ID_Reference"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_bronze_device_sdk.py"}, "environment_key": "fraud_data_pipeline_environment"},
             {"task_key": "Bronze_Transactions", "depends_on": [{"task_key": "Device_ID_Reference"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_bronze_app_transactions.py"}, "environment_key": "fraud_data_pipeline_environment"},
             {"task_key": "Silver_Device_SDK", "depends_on": [{"task_key": "Bronze_Device_SDK"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_silver_device_sdk.py"}, "environment_key": "fraud_data_pipeline_environment"},

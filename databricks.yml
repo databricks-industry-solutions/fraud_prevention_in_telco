@@ -51,6 +51,12 @@ resources:
       name: "raw_device_sdk"
       volume_type: "MANAGED"
 
+    raw_network_data:
+      catalog_name: ${var.catalog}
+      schema_name: ${var.schema}
+      name: "raw_network_data"
+      volume_type: "MANAGED"
+
   jobs:
     fraud_data_pipeline:
       name: "[${bundle.target}] Fraud Data Pipeline"
@@ -63,6 +69,18 @@ resources:
         - task_key: Device_ID_Reference
           spark_python_task:
             python_file: ./notebooks/generate_device_id_reference.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Cell_Registry
+          depends_on:
+            - task_key: Device_ID_Reference
+          spark_python_task:
+            python_file: ./notebooks/generate_cell_registry.py
             parameters:
               - "--catalog"
               - "{{job.parameters.catalog}}"
@@ -176,6 +194,56 @@ resources:
             - task_key: Gold_Device_SDK
           spark_python_task:
             python_file: ./notebooks/risk_engine.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Raw_Network_Data
+          depends_on:
+            - task_key: Cell_Registry
+          spark_python_task:
+            python_file: ./notebooks/generate_raw_network_data.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Bronze_Network_Data
+          depends_on:
+            - task_key: Raw_Network_Data
+          spark_python_task:
+            python_file: ./notebooks/generate_bronze_network_data.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+              - "--source"
+              - "volume"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Silver_Network_Data
+          depends_on:
+            - task_key: Bronze_Network_Data
+          spark_python_task:
+            python_file: ./notebooks/generate_silver_network_data.py
+            parameters:
+              - "--catalog"
+              - "{{job.parameters.catalog}}"
+              - "--schema"
+              - "{{job.parameters.schema}}"
+          environment_key: fraud_data_pipeline_environment
+
+        - task_key: Gold_Network_Data
+          depends_on:
+            - task_key: Silver_Network_Data
+          spark_python_task:
+            python_file: ./notebooks/generate_gold_network_data.py
             parameters:
               - "--catalog"
               - "{{job.parameters.catalog}}"

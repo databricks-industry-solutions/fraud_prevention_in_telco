@@ -49,6 +49,8 @@ databricks bundle run fraud_data_pipeline
 
 ```
 Device_ID_Reference
+    ├─> Cell_Registry
+    │       └─> Raw_Network_Data ─> Bronze_Network_Data ─> Silver_Network_Data ─> Gold_Network_Data
     ├─> Raw_Device_SDK ─> Bronze_Device_SDK ─> Silver_Device_SDK ─> Gold_Device_SDK ─┐
     └─> Raw_App_Transactions ─> Bronze_Transactions ─> Silver_Transactions ─> Gold_Transactions ─> Risk_Engine ─> analyst_simulation
                                                                                     ^
@@ -59,6 +61,7 @@ Device_ID_Reference
 Raw data is written as JSON Lines (NDJSON) before Bronze ingestion (paths use the configured catalog/schema):
 - Device profiles: `/Volumes/{catalog}/{schema}/raw_device_sdk/`
 - Transactions: `/Volumes/{catalog}/{schema}/raw_app_transactions/`
+- Network (CDR-like): `/Volumes/{catalog}/{schema}/raw_network_data/`
 
 ## Common Commands
 
