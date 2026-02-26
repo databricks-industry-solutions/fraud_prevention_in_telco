@@ -192,6 +192,7 @@ resources:
           depends_on:
             - task_key: Gold_Transactions
             - task_key: Gold_Device_SDK
+            - task_key: Gold_Network_Data
           spark_python_task:
             python_file: ./notebooks/risk_engine.py
             parameters:

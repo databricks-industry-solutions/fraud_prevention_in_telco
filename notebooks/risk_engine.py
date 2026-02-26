@@ -15,6 +15,18 @@ from pyspark.sql import SparkSession
 
 spark = SparkSession.getActiveSession()
 
+# Earth radius in km for haversine
+_EARTH_RADIUS_KM = 6371.0
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in km between (lat1,lon1) and (lat2,lon2)."""
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    return 2 * _EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.minimum(a, 1.0)))
+
 
 class RiskEngine:
     def __init__(self, catalog: str = "telecommunications", schema: str = "fraud_data"):
@@ -67,6 +79,102 @@ class RiskEngine:
         )
         return gold_device.toPandas()
 
+    def load_gold_network_data(self) -> pd.DataFrame:
+        """Load gold network (CDR-like) layer from catalog."""
+        print("Loading gold network data...")
+        gold_network = spark.read.table(
+            f"{self.catalog}.{self.schema}.gold_network_data"
+        )
+        return gold_network.toPandas()
+
+    def compute_network_rule_features(self, network_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Compute per-device network rule flags from gold_network_data (R1, R2, R5, R7, R13).
+        Returns one row per subscriber_device_id with boolean rule columns.
+        """
+        if network_df is None or len(network_df) == 0:
+            return pd.DataFrame(columns=["subscriber_device_id"])
+
+        required = ["subscriber_device_id", "timestamp_start", "geo_lat_est", "geo_lon_est"]
+        if not all(c in network_df.columns for c in required):
+            return pd.DataFrame(columns=["subscriber_device_id"])
+
+        network_df = network_df.copy()
+        network_df["timestamp_start"] = pd.to_datetime(network_df["timestamp_start"])
+        network_df["geo_lat_est"] = pd.to_numeric(network_df["geo_lat_est"], errors="coerce")
+        network_df["geo_lon_est"] = pd.to_numeric(network_df["geo_lon_est"], errors="coerce")
+        network_df = network_df.dropna(subset=["geo_lat_est", "geo_lon_est"])
+        if len(network_df) == 0:
+            return pd.DataFrame(columns=["subscriber_device_id"])
+
+        rows = []
+        for device_id, grp in network_df.groupby("subscriber_device_id"):
+            grp = grp.sort_values("timestamp_start").reset_index(drop=True)
+            impossible_high = False
+            impossible_medium = False
+            cell_ip_mismatch = False
+            rapid_cell_hop = False
+            roaming_anomaly = False
+
+            # R1/R2: Impossible travel (consecutive events)
+            for i in range(1, len(grp)):
+                lat1 = grp.iloc[i - 1]["geo_lat_est"]
+                lon1 = grp.iloc[i - 1]["geo_lon_est"]
+                lat2 = grp.iloc[i]["geo_lat_est"]
+                lon2 = grp.iloc[i]["geo_lon_est"]
+                t1 = grp.iloc[i - 1]["timestamp_start"]
+                t2 = grp.iloc[i]["timestamp_start"]
+                delta_hr = (t2 - t1).total_seconds() / 3600.0
+                if delta_hr <= 0:
+                    continue
+                dist_km = _haversine_km(lat1, lon1, lat2, lon2)
+                speed_kmph = dist_km / delta_hr
+                if dist_km > 100 and speed_kmph > 1000:
+                    impossible_high = True
+                if speed_kmph > 250:
+                    impossible_medium = True
+
+            # R5: Cell country != IP country (high-risk event types)
+            if "geo_country" in grp.columns and "ip_geo_country" in grp.columns:
+                mismatch = (grp["geo_country"].astype(str).str.strip() != grp["ip_geo_country"].astype(str).str.strip())
+                if mismatch.any():
+                    cell_ip_mismatch = True
+
+            # R7: Consecutive events > 50 km apart with time_delta < 5 min
+            for i in range(1, len(grp)):
+                lat1 = grp.iloc[i - 1]["geo_lat_est"]
+                lon1 = grp.iloc[i - 1]["geo_lon_est"]
+                lat2 = grp.iloc[i]["geo_lat_est"]
+                lon2 = grp.iloc[i]["geo_lon_est"]
+                t1 = grp.iloc[i - 1]["timestamp_start"]
+                t2 = grp.iloc[i]["timestamp_start"]
+                delta_min = (t2 - t1).total_seconds() / 60.0
+                dist_km = _haversine_km(lat1, lon1, lat2, lon2)
+                if dist_km > 50 and delta_min < 5:
+                    rapid_cell_hop = True
+                    break
+
+            # R13: Roaming - multiple countries in short window (simplified)
+            if "geo_country" in grp.columns and "is_roaming" in grp.columns:
+                roaming = grp[grp["is_roaming"].fillna(False).astype(bool)]
+                if len(roaming) >= 2:
+                    countries = roaming["geo_country"].astype(str).unique()
+                    if len(countries) >= 2:
+                        time_span_hr = (roaming["timestamp_start"].max() - roaming["timestamp_start"].min()).total_seconds() / 3600.0
+                        if time_span_hr < 2:
+                            roaming_anomaly = True
+
+            rows.append({
+                "subscriber_device_id": device_id,
+                "network_impossible_travel_high": impossible_high,
+                "network_impossible_travel_medium": impossible_medium,
+                "network_cell_ip_mismatch": cell_ip_mismatch,
+                "network_rapid_cell_hop": rapid_cell_hop,
+                "network_roaming_anomaly": roaming_anomaly,
+            })
+
+        return pd.DataFrame(rows)
+
     def join_gold_transactions_with_device(
         self, gold_transactions: pd.DataFrame, gold_device: pd.DataFrame
     ) -> pd.DataFrame:
@@ -82,6 +190,40 @@ class RiskEngine:
         print(
             f"Joined {len(merged)} transactions; "
             f"{merged['subscriber_device_id'].isin(gold_device['subscriber_device_id']).sum()} with device match"
+        )
+        return merged
+
+    def join_gold_with_network_features(
+        self, gold_merged: pd.DataFrame, network_features: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Left-join network rule features to gold (transactions + device) on subscriber_device_id."""
+        if network_features is None or len(network_features) == 0:
+            for col in [
+                "network_impossible_travel_high",
+                "network_impossible_travel_medium",
+                "network_cell_ip_mismatch",
+                "network_rapid_cell_hop",
+                "network_roaming_anomaly",
+            ]:
+                gold_merged[col] = False
+            return gold_merged
+        merged = gold_merged.merge(
+            network_features,
+            on="subscriber_device_id",
+            how="left",
+        )
+        for col in [
+            "network_impossible_travel_high",
+            "network_impossible_travel_medium",
+            "network_cell_ip_mismatch",
+            "network_rapid_cell_hop",
+            "network_roaming_anomaly",
+        ]:
+            if col in merged.columns:
+                merged[col] = merged[col].fillna(False).astype(bool)
+        print(
+            f"Joined network features; "
+            f"{merged['subscriber_device_id'].isin(network_features['subscriber_device_id']).sum()} with network features"
         )
         return merged
 
@@ -184,6 +326,28 @@ class RiskEngine:
             )
             risk_features["base_score"] += emulator.astype(int) * 12
 
+        # Network (CDR) rule-based risk (R1, R2, R5, R7, R13)
+        if "network_impossible_travel_high" in gold_data.columns:
+            risk_features["base_score"] += (
+                gold_data["network_impossible_travel_high"].fillna(False).astype(int) * 15
+            )
+        if "network_impossible_travel_medium" in gold_data.columns:
+            risk_features["base_score"] += (
+                gold_data["network_impossible_travel_medium"].fillna(False).astype(int) * 8
+            )
+        if "network_cell_ip_mismatch" in gold_data.columns:
+            risk_features["base_score"] += (
+                gold_data["network_cell_ip_mismatch"].fillna(False).astype(int) * 10
+            )
+        if "network_rapid_cell_hop" in gold_data.columns:
+            risk_features["base_score"] += (
+                gold_data["network_rapid_cell_hop"].fillna(False).astype(int) * 12
+            )
+        if "network_roaming_anomaly" in gold_data.columns:
+            risk_features["base_score"] += (
+                gold_data["network_roaming_anomaly"].fillna(False).astype(int) * 10
+            )
+
         risk_features["base_score"] = risk_features["base_score"].clip(0, 100)
 
         num_transactions = len(risk_features)
@@ -265,6 +429,16 @@ class RiskEngine:
                 reason = 'Geo velocity anomaly'
             elif row.get('subscriber_profile_change_cnt_24h', 0) > 3:
                 reason = 'Profile change spike'
+            elif row.get('network_impossible_travel_high'):
+                reason = 'Impossible travel (network)'
+            elif row.get('network_impossible_travel_medium'):
+                reason = 'High implied speed (network)'
+            elif row.get('network_cell_ip_mismatch'):
+                reason = 'Cell vs IP location mismatch'
+            elif row.get('network_rapid_cell_hop'):
+                reason = 'Rapid cell tower hop'
+            elif row.get('network_roaming_anomaly'):
+                reason = 'Roaming / country jump anomaly'
             elif row.get('subscriber_vpn_active') or row.get('subscriber_vpn_connected'):
                 reason = 'Suspicious device (VPN)'
             elif (
@@ -298,6 +472,13 @@ class RiskEngine:
         gold = self.join_gold_transactions_with_device(
             gold_transactions, gold_device
         )
+        try:
+            gold_network = self.load_gold_network_data()
+            network_features = self.compute_network_rule_features(gold_network)
+            gold = self.join_gold_with_network_features(gold, network_features)
+        except Exception as e:
+            print(f"Gold network data not available or error: {e}; continuing without network rules.")
+            gold = self.join_gold_with_network_features(gold, pd.DataFrame())
         scored = self.calculate_fraud_scores(gold)
         labeled = self.assign_engine_labels(scored)
         engine_data = self.generate_engine_assessment(labeled)

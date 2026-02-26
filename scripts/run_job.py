@@ -30,7 +30,7 @@ fraud_data_pipeline = Job.from_dict(
             {"task_key": "Gold_Device_SDK", "depends_on": [{"task_key": "Silver_Device_SDK"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_gold_device_sdk.py"}, "environment_key": "fraud_data_pipeline_environment"},
             {"task_key": "Silver_Transactions", "depends_on": [{"task_key": "Bronze_Transactions"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_silver_app_transactions.py"}, "environment_key": "fraud_data_pipeline_environment"},
             {"task_key": "Gold_Transactions", "depends_on": [{"task_key": "Silver_Transactions"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/generate_gold_app_transactions.py"}, "environment_key": "fraud_data_pipeline_environment"},
-            {"task_key": "Risk_Engine", "depends_on": [{"task_key": "Gold_Transactions"}, {"task_key": "Gold_Device_SDK"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/risk_engine.py"}, "environment_key": "fraud_data_pipeline_environment"},
+            {"task_key": "Risk_Engine", "depends_on": [{"task_key": "Gold_Transactions"}, {"task_key": "Gold_Device_SDK"}, {"task_key": "Gold_Network_Data"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/risk_engine.py"}, "environment_key": "fraud_data_pipeline_environment"},
             {"task_key": "analyst_simulation", "depends_on": [{"task_key": "Risk_Engine"}], "spark_python_task": {"python_file": f"{REPO_ROOT}/notebooks/run_analyst_simulation.py"}, "environment_key": "fraud_data_pipeline_environment"},
         ],
         "queue": {"enabled": True},
