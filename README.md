@@ -8,12 +8,13 @@ A Databricks Asset Bundle implementing a **medallion architecture** (Bronze → 
 
 ## What It Does
 
-Generates 9 tables of synthetic fraud detection data:
+Generates synthetic fraud detection data across three pipelines:
 
-- Device profiles and transaction data
-- Risk scoring and fraud detection
-- Analyst review workflows
-- Ready for dashboards and ML models
+- **Device SDK**: Device profiles (raw → bronze → silver → gold) for device-based risk signals.
+- **Transactions**: App transaction data (raw → bronze → silver → gold) with risk features.
+- **Network (CDR-like)**: Network activity records (raw → bronze → silver → gold) with cell/location context for impossible-travel and location rules.
+
+The **risk engine** scores transactions using all three gold tables (transactions, device SDK, network), with rules for impossible travel, cell–IP mismatch, rapid cell hop, roaming anomalies, device signals (VPN, encryption, emulator), and transaction risk features. Output feeds analyst simulation and dashboards.
 
 **Configuration**: Uses `telecommunications` catalog and `fraud_data` schema by default. Both can be changed via job parameters.
 
@@ -24,7 +25,7 @@ Generates 9 tables of synthetic fraud detection data:
 3. **Deploy**: Click "Deploy" in the UI, or run `databricks bundle deploy`.
 4. **Run**: In the Deployments tab (🚀), click "Run" on the **Fraud Data Pipeline** job, or run `databricks bundle run fraud_data_pipeline`.
 
-The pipeline runs 11 tasks and generates raw unstructured data plus all tables for the Fraud Detection dashboard and downstream applications.
+The pipeline runs 16 tasks and generates raw unstructured data plus all tables (including cell registry and network CDR-like data) for the Fraud Detection dashboard and downstream applications.
 
 ## Quick Start (CLI)
 
@@ -50,13 +51,12 @@ databricks bundle run fraud_data_pipeline
 ```
 Device_ID_Reference
     ├─> Cell_Registry
-    │       └─> Raw_Network_Data ─> Bronze_Network_Data ─> Silver_Network_Data ─> Gold_Network_Data
-    ├─> Raw_Device_SDK ─> Bronze_Device_SDK ─> Silver_Device_SDK ─> Gold_Device_SDK ─┐
-    └─> Raw_App_Transactions ─> Bronze_Transactions ─> Silver_Transactions ─> Gold_Transactions ─> Risk_Engine ─> analyst_simulation
-                                                                                    ^
-                                                                                    │
-                                                                         (both gold tables feed Risk_Engine)
+    │       └─> Raw_Network_Data ─> Bronze_Network_Data ─> Silver_Network_Data ─> Gold_Network_Data ─┐
+    ├─> Raw_Device_SDK ─> Bronze_Device_SDK ─> Silver_Device_SDK ─> Gold_Device_SDK ────────────────┤
+    └─> Raw_App_Transactions ─> Bronze_Transactions ─> Silver_Transactions ─> Gold_Transactions ──┴─> Risk_Engine ─> analyst_simulation
 ```
+
+All three gold tables (Gold_Transactions, Gold_Device_SDK, Gold_Network_Data) feed the **Risk Engine**, which applies transaction, device, and network rules (e.g. impossible travel, cell–IP mismatch, rapid cell hop, roaming anomaly, VPN/emulator) and writes `transaction_risk_engine`.
 
 Raw data is written as JSON Lines (NDJSON) before Bronze ingestion (paths use the configured catalog/schema):
 - Device profiles: `/Volumes/{catalog}/{schema}/raw_device_sdk/`
