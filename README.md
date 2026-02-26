@@ -14,7 +14,7 @@ Generates synthetic fraud detection data across three pipelines:
 - **Transactions**: App transaction data (raw → bronze → silver → gold) with risk features.
 - **Network (CDR-like)**: Network activity records (raw → bronze → silver → gold) with cell/location context for impossible-travel and location rules.
 
-The **risk engine** scores transactions using all three gold tables (transactions, device SDK, network), with rules for impossible travel, cell–IP mismatch, rapid cell hop, roaming anomalies, device signals (VPN, encryption, emulator), and transaction risk features. Output feeds analyst simulation and dashboards.
+The **risk engine** scores transactions using all three gold tables (transactions, device SDK, network), with rules for impossible travel, cell–IP mismatch, rapid cell hop, roaming anomalies, device signals (VPN, encryption, emulator), and transaction risk features. Output feeds analyst assignment and dashboards.
 
 **Configuration**: Uses `telecommunications` catalog and `fraud_data` schema by default. Both can be changed via job parameters.
 
@@ -25,7 +25,7 @@ The **risk engine** scores transactions using all three gold tables (transaction
 3. **Deploy**: Click "Deploy" in the UI, or run `databricks bundle deploy`.
 4. **Run**: In the Deployments tab (🚀), click "Run" on the **Fraud Data Pipeline** job, or run `databricks bundle run fraud_data_pipeline`.
 
-The pipeline runs 16 tasks and generates raw unstructured data plus all tables (including cell registry and network CDR-like data) for the Fraud Detection dashboard and downstream applications.
+The pipeline runs 17 tasks and generates raw unstructured data plus all tables (including cell registry, fraud analyst roster, and network CDR-like data) for the Fraud Detection dashboard and downstream applications.
 
 ## Quick Start (CLI)
 

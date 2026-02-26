@@ -671,7 +671,8 @@ All tables are created in `telecommunications.fraud_data`:
 | `silver_network_data` | ~150,000 | Cleaned network events with cell geo |
 | `gold_network_data` | ~150,000 | Business/risk-ready network data for risk engine |
 | `transaction_risk_engine` | 100,000 | Engine baseline scores, labels, and statuses |
-| `analyst_review` | varies | Analyst outcomes (review status, notes, FP/FN) |
+| `fraud_analysts` | 204 (51×4) | Analyst roster (same count per state) for state-based assignment |
+| `analyst_review` | 100,000 | Analyst outcomes (review status, notes, FP/FN); one per transaction with assigned_analyst_id and assigned_analyst by state |
 | `transaction_risk` | 100,000 | Final fraud decisions merged with analyst outcomes |
 
 ## Troubleshooting

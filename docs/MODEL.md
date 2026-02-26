@@ -289,11 +289,14 @@ SELECT transaction_id, fraud_score, risk_reason_engine
 FROM telecommunications.fraud_data.transaction_risk_engine
 WHERE risk_reason_engine LIKE '%SIM swap%';
 
--- Analyst review outcomes
+-- Analyst review outcomes (all transactions have assigned_analyst_id and assigned_analyst by state)
 SELECT review_status, COUNT(*) as count, 
        SUM(CASE WHEN fraud_label_analyst = 1 THEN 1 ELSE 0 END) as confirmed_fraud
 FROM telecommunications.fraud_data.analyst_review
 GROUP BY review_status;
+
+-- Fraud analyst roster (same number per state for workload imbalance visibility)
+SELECT state, region, COUNT(*) AS analysts FROM telecommunications.fraud_data.fraud_analysts GROUP BY state, region;
 ```
 
 ---
