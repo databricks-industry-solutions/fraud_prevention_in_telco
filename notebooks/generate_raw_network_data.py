@@ -60,7 +60,7 @@ def generate_raw_network_events(
     events = []
     for i in range(num_events):
         ts_start = start_date + timedelta(
-            seconds=random.randint(0, int((end_date - start_date).total_seconds()))
+            seconds=random.randint(0, int((end_date - start_date).total_seconds())))
         duration_sec = random.choice([0, 30, 60, 120, 300, 600]) if random.random() > 0.3 else 0
         ts_end = ts_start + timedelta(seconds=duration_sec) if duration_sec else None
         event_type, subtype, direction = random.choice(EVENT_TYPES)
