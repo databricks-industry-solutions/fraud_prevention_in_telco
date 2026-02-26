@@ -53,7 +53,7 @@ Device_ID_Reference
     ├─> Cell_Registry
     │       └─> Raw_Network_Data ─> Bronze_Network_Data ─> Silver_Network_Data ─> Gold_Network_Data ─┐
     ├─> Raw_Device_SDK ─> Bronze_Device_SDK ─> Silver_Device_SDK ─> Gold_Device_SDK ────────────────┤
-    └─> Raw_App_Transactions ─> Bronze_Transactions ─> Silver_Transactions ─> Gold_Transactions ──┴─> Risk_Engine ─> analyst_simulation
+    └─> Raw_App_Transactions ─> Bronze_Transactions ─> Silver_Transactions ─> Gold_Transactions ──┴─> Risk_Engine ─> analyst_assignment
 ```
 
 All three gold tables (Gold_Transactions, Gold_Device_SDK, Gold_Network_Data) feed the **Risk Engine**, which applies transaction, device, and network rules (e.g. impossible travel, cell–IP mismatch, rapid cell hop, roaming anomaly, VPN/emulator) and writes `transaction_risk_engine`.

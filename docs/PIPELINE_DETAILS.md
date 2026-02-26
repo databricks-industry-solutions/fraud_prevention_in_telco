@@ -42,6 +42,7 @@ graph TD
     end
 
     subgraph "Analyst Review"
+        FA[fraud_analysts] -->|Assign by state| ANALYST
         RISK_ENGINE -->|Simulated Analyst Workflow| ANALYST[analyst_review]
         ANALYST -->|Merge| TRISK[transaction_risk]
     end
@@ -61,8 +62,9 @@ graph TD
 6. **Raw Network Data Generation**: `generate_raw_network_data.main()` generates CDR-like network events (uses device_id_reference and cell_registry), writes to `/Volumes/{catalog}/{schema}/raw_network_data/`, partitioned by yyyy/mm/dd
 7. **Network Bronze/Silver/Gold**: `generate_bronze_network_data.main()` ingests from Volume; `generate_silver_network_data.main()` unpacks report and joins cell_registry for geo; `generate_gold_network_data.main()` produces risk-ready `gold_network_data`
 8. **Risk Baseline**: `risk_engine.main()` loads `gold_app_transactions`, `gold_device_sdk`, and `gold_network_data`; joins on `subscriber_device_id`; computes network rule features (impossible travel, cell–IP mismatch, rapid cell hop, roaming anomaly); scores using transaction, device, and network rules; stores engine outputs in `transaction_risk_engine`
-9. **Analyst Review**: `run_analyst_simulation.main()` simulates human review, producing `analyst_review` and the final `transaction_risk` table
-10. **Validation**: Confirms shared device IDs between pipelines
+9. **Fraud Analyst Roster**: `generate_fraud_analysts.main()` creates `fraud_analysts` (same number of analysts per state) so workload imbalance by state is visible (cases per analyst).
+10. **Analyst Review**: `run_analyst_simulation.main()` loads `fraud_analysts`, assigns an analyst to every transaction by state (round-robin), then simulates review; all cases (Pending review, Blocked, Passed) have an assigned analyst; produces `analyst_review` and the final `transaction_risk` table
+11. **Validation**: Confirms shared device IDs between pipelines
 
 ---
 
@@ -343,19 +345,31 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
+### 12b. fraud_analysts
+**Purpose**: Roster of fraud analysts by state (same count per state for workload imbalance visibility)
+
+**Key Columns**:
+- `analyst_id`: Unique analyst identifier (e.g. a_CA_0)
+- `analyst_name`: Analyst full name
+- `state`: US state (analyst location)
+- `region`: Region (WEST, EAST, SOUTH, NORTH, CENTER)
+
+**Records**: (analysts_per_state × number of states); used to assign every transaction an analyst in the same state and to compute cases-per-analyst by state for "need support" dashboards.
+
+---
+
 ### 13. analyst_review
-**Purpose**: Simulated analyst review outcomes
+**Purpose**: Simulated analyst review outcomes; every transaction has an assigned analyst (by state)
 
 **Key Columns**:
 - `transaction_id`: Transaction identifier
-- `review_status`: Outcome (confirmed_fraud, false_positive, etc.)
+- `review_status`: Outcome (reviewed, escalated, pending_review)
+- `assigned_analyst_id`, `assigned_analyst`: Analyst for this case (assigned by transaction state, round-robin)
 - `analyst_notes`: Review comments
-- `confidence_level`: Analyst confidence (low/medium/high)
-- `false_positive_flag`: FP indicator
-- `false_negative_flag`: FN indicator
-- `review_timestamp`: Review completion time
+- `is_fp`, `is_fn`: False positive / false negative flags
+- `last_review_date`, `mitigation_steps`: When applicable
 
-**Records**: Varies (only reviewed/escalated cases)
+**Records**: One per transaction (all cases have an assigned analyst)
 
 ---
 
@@ -561,11 +575,17 @@ When fraud is detected, the engine generates:
 **Purpose**: Load all three gold tables, join on device ID, compute network rule features, calculate fraud scores and labels (transaction + device + network rules)  
 **Output**: `transaction_risk_engine` table
 
-### Task 16: analyst_simulation
+### Task 15b: Generate_Fraud_Analysts
+**Script**: `generate_fraud_analysts.py`  
+**Dependencies**: None  
+**Purpose**: Build fraud analyst roster with same number of analysts per state (for workload imbalance visibility: cases per analyst by state)  
+**Output**: `fraud_analysts` table (analyst_id, analyst_name, state, region)
+
+### Task 16: analyst_assignment
 **Script**: `run_analyst_simulation.py`  
-**Dependencies**: Risk_Engine  
-**Purpose**: Simulate analyst review workflow  
-**Output**: `analyst_review` and `transaction_risk` tables
+**Dependencies**: Risk_Engine, Generate_Fraud_Analysts  
+**Purpose**: Assign analyst to every transaction by state (round-robin); simulate analyst review workflow  
+**Output**: `analyst_review` and `transaction_risk` tables (all cases have assigned_analyst and assigned_analyst_id)
 
 ---
 
@@ -615,7 +635,10 @@ python notebooks/generate_gold_network_data.py --catalog telecommunications --sc
 # Run risk engine (uses gold_app_transactions, gold_device_sdk, gold_network_data)
 python notebooks/risk_engine.py --catalog telecommunications --schema fraud_data
 
-# Run analyst simulation
+# Generate fraud analyst roster (same # per state; run before analyst_assignment)
+python notebooks/generate_fraud_analysts.py --catalog telecommunications --schema fraud_data
+
+# Run analyst simulation (assigns analysts by state, then simulates review)
 python notebooks/run_analyst_simulation.py --catalog telecommunications --schema fraud_data
 ```
 

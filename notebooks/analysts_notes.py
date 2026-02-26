@@ -13,7 +13,8 @@ from pyspark.sql import SparkSession
 
 spark = SparkSession.getActiveSession()
 
-ANALYSTS = [
+# Fallback when fraud_analysts table is missing (e.g. pipeline run without Generate_Fraud_Analysts)
+ANALYSTS_FALLBACK = [
     "Sarah Johnson",
     "Michael Chen",
     "Emily Rodriguez",
@@ -54,6 +55,7 @@ class AnalystReview:
         self.catalog = catalog
         self.schema = schema
         self.engine_table = self._load_engine_table()
+        self.analysts_by_state = self._load_analysts_by_state()
 
     def _load_engine_table(self) -> pd.DataFrame:
         print("Loading transaction_risk_engine baseline...")
@@ -62,10 +64,46 @@ class AnalystReview:
         )
         return engine.toPandas()
 
+    def _load_analysts_by_state(self) -> dict:
+        """Load fraud_analysts and return state -> list of (analyst_id, analyst_name) for assignment."""
+        try:
+            analysts_df = spark.read.table(
+                f"{self.catalog}.{self.schema}.fraud_analysts"
+            ).toPandas()
+        except Exception:
+            print("fraud_analysts table not found; all transactions will use fallback analyst assignment.")
+            return {}
+        by_state = analysts_df.groupby("state", sort=False).apply(
+            lambda g: list(zip(g["analyst_id"].astype(str), g["analyst_name"].astype(str)))
+        )
+        return by_state.to_dict()
+
+    def _assign_analysts_by_state(self) -> None:
+        """Assign an analyst to every transaction by state (round-robin within state). All cases get an analyst."""
+        if not self.analysts_by_state:
+            self.review_frame["assigned_analyst_id"] = ""
+            for idx in self.review_frame.index:
+                self.review_frame.at[idx, "assigned_analyst"] = random.choice(ANALYSTS_FALLBACK)
+            return
+        self.review_frame["assigned_analyst_id"] = ""
+        self.review_frame["assigned_analyst"] = ""
+        for state, group in self.review_frame.groupby("transaction_state", sort=False):
+            analysts = self.analysts_by_state.get(state)
+            if not analysts:
+                for idx in group.index:
+                    self.review_frame.at[idx, "assigned_analyst"] = "Unassigned"
+                continue
+            n = len(analysts)
+            for i, (idx, _) in enumerate(group.iterrows()):
+                aid, aname = analysts[i % n]
+                self.review_frame.at[idx, "assigned_analyst_id"] = aid
+                self.review_frame.at[idx, "assigned_analyst"] = aname
+
     def _initialise_review_frame(self) -> pd.DataFrame:
         df = self.engine_table.copy()
         df["review_status"] = "pending_review"
         df["assigned_analyst"] = None
+        df["assigned_analyst_id"] = None
         df["fraud_label_analyst"] = np.nan
         df["analyst_notes"] = ""
         df["last_review_date"] = pd.NaT
@@ -91,7 +129,7 @@ class AnalystReview:
         for idx in indices:
             row = self.review_frame.loc[idx]
             self.review_frame.at[idx, "review_status"] = "reviewed"
-            self.review_frame.at[idx, "assigned_analyst"] = random.choice(ANALYSTS)
+            # assigned_analyst already set by state in _assign_analysts_by_state; do not overwrite
 
             if row["risk_status_engine"] == "passed":
                 fraud_choice = random.random() < 0.35
@@ -173,6 +211,7 @@ class AnalystReview:
     def build_analyst_review(self) -> pd.DataFrame:
         print("Simulating analyst workflow...")
         self.review_frame = self._initialise_review_frame()
+        self._assign_analysts_by_state()
         self._review_high_risk()
         self._review_blocked()
         self._spot_check_passed()
@@ -186,6 +225,7 @@ class AnalystReview:
             [
                 "transaction_id",
                 "review_status",
+                "assigned_analyst_id",
                 "assigned_analyst",
                 "fraud_label_analyst",
                 "analyst_notes",
@@ -222,7 +262,7 @@ class AnalystReview:
         merged["is_fp"] = np.where(reviewed_mask, merged["is_fp"].fillna(False), None)
         merged["is_fn"] = np.where(reviewed_mask, merged["is_fn"].fillna(False), None)
 
-        for col in ["review_status", "assigned_analyst", "analyst_notes", "mitigation_steps"]:
+        for col in ["review_status", "assigned_analyst_id", "assigned_analyst", "analyst_notes", "mitigation_steps"]:
             merged[col] = merged[col].fillna("")
 
         merged["last_review_date"] = pd.to_datetime(merged["last_review_date"], errors="coerce")
@@ -253,6 +293,7 @@ class AnalystReview:
                 "risk_status_engine",
                 "risk_reason_engine",
                 "review_status",
+                "assigned_analyst_id",
                 "assigned_analyst",
                 "analyst_notes",
                 "last_review_date",

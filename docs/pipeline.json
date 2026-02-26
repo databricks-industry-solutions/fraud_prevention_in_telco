@@ -134,7 +134,7 @@
       "environment_key": "fraud_data_pipeline_environment"
     },
     {
-      "task_key": "analyst_simulation",
+      "task_key": "analyst_assignment",
       "depends_on": [
         {
           "task_key": "Risk_Engine"
