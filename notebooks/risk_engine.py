@@ -51,11 +51,39 @@ class RiskEngine:
             ],
         }
 
-    def load_gold_layer(self) -> pd.DataFrame:
-        """Load gold layer data from catalog."""
-        print("Loading gold layer data...")
-        gold_data = spark.read.table(f"{self.catalog}.{self.schema}.gold_app_transactions")
+    def load_gold_transactions(self) -> pd.DataFrame:
+        """Load gold transaction layer from catalog."""
+        print("Loading gold transaction layer...")
+        gold_data = spark.read.table(
+            f"{self.catalog}.{self.schema}.gold_app_transactions"
+        )
         return gold_data.toPandas()
+
+    def load_gold_device_sdk(self) -> pd.DataFrame:
+        """Load gold device SDK layer from catalog."""
+        print("Loading gold device SDK layer...")
+        gold_device = spark.read.table(
+            f"{self.catalog}.{self.schema}.gold_device_sdk"
+        )
+        return gold_device.toPandas()
+
+    def join_gold_transactions_with_device(
+        self, gold_transactions: pd.DataFrame, gold_device: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Left-join transaction gold to device gold on subscriber_device_id."""
+        print("Joining gold transactions with gold device SDK...")
+        # Suffix device columns where names collide (e.g. location, timezone)
+        merged = gold_transactions.merge(
+            gold_device,
+            on="subscriber_device_id",
+            how="left",
+            suffixes=("", "_device"),
+        )
+        print(
+            f"Joined {len(merged)} transactions; "
+            f"{merged['subscriber_device_id'].isin(gold_device['subscriber_device_id']).sum()} with device match"
+        )
+        return merged
 
     def calculate_fraud_scores(self, gold_data: pd.DataFrame) -> pd.DataFrame:
         """Calculate fraud scores based on risk features from gold layer."""
@@ -122,6 +150,39 @@ class RiskEngine:
         risk_features["base_score"] += (
             (100 - risk_features["device_trust_score"]) * 0.2
         ).clip(upper=15)
+
+        # Device SDK-based risk (from gold_device_sdk when joined)
+        if "subscriber_vpn_active" in gold_data.columns:
+            risk_features["base_score"] += (
+                gold_data["subscriber_vpn_active"].fillna(False).astype(int) * 6
+            )
+        if "subscriber_vpn_connected" in gold_data.columns:
+            risk_features["base_score"] += (
+                gold_data["subscriber_vpn_connected"].fillna(False).astype(int) * 6
+            )
+        if "subscriber_device_encryption" in gold_data.columns:
+            risk_features["base_score"] += (
+                (
+                    gold_data["subscriber_device_encryption"].astype(str).str.lower()
+                    == "unencrypted"
+                ).astype(int)
+                * 10
+            )
+        if "subscriber_selinux_status" in gold_data.columns:
+            risk_features["base_score"] += (
+                (
+                    gold_data["subscriber_selinux_status"].astype(str).str.lower()
+                    == "disabled"
+                ).astype(int)
+                * 10
+            )
+        if "subscriber_device_model" in gold_data.columns:
+            emulator = (
+                gold_data["subscriber_device_model"]
+                .astype(str)
+                .str.contains("SDK built for x86", case=False, na=False)
+            )
+            risk_features["base_score"] += emulator.astype(int) * 12
 
         risk_features["base_score"] = risk_features["base_score"].clip(0, 100)
 
@@ -204,6 +265,20 @@ class RiskEngine:
                 reason = 'Geo velocity anomaly'
             elif row.get('subscriber_profile_change_cnt_24h', 0) > 3:
                 reason = 'Profile change spike'
+            elif row.get('subscriber_vpn_active') or row.get('subscriber_vpn_connected'):
+                reason = 'Suspicious device (VPN)'
+            elif (
+                str(row.get('subscriber_device_encryption', '')).lower()
+                == 'unencrypted'
+            ):
+                reason = 'Suspicious device (unencrypted)'
+            elif (
+                str(row.get('subscriber_selinux_status', '')).lower()
+                == 'disabled'
+            ):
+                reason = 'Suspicious device (SELinux disabled)'
+            elif pd.notna(row.get('subscriber_device_model')) and 'SDK built for x86' in str(row.get('subscriber_device_model', '')):
+                reason = 'Suspicious device (emulator)'
             else:
                 reason = 'Composite risk signals'
 
@@ -218,7 +293,11 @@ class RiskEngine:
 
     def build_engine_table(self) -> pd.DataFrame:
         """End-to-end creation of the transaction_risk_engine table."""
-        gold = self.load_gold_layer()
+        gold_transactions = self.load_gold_transactions()
+        gold_device = self.load_gold_device_sdk()
+        gold = self.join_gold_transactions_with_device(
+            gold_transactions, gold_device
+        )
         scored = self.calculate_fraud_scores(gold)
         labeled = self.assign_engine_labels(scored)
         engine_data = self.generate_engine_assessment(labeled)

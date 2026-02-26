@@ -25,12 +25,14 @@ graph TD
 
     subgraph "Daily Generation"
         D_BRONZE -->|Unwrap & Clean| D_SILVER[Silver Device SDK]
+        D_SILVER -->|Latest per device| D_GOLD[Gold Device SDK]
         T_BRONZE -->|Unwrap + Risk Features| T_SILVER[Silver Transactions]
         T_SILVER -->|Business Select + Risk Features| T_GOLD[Gold Transactions]
     end
 
     subgraph "Risk Baseline"
         T_GOLD -->|Score + Engine Labels| RISK_ENGINE[transaction_risk_engine]
+        D_GOLD -->|Join on device_id| RISK_ENGINE
     end
 
     subgraph "Analyst Review"
@@ -49,7 +51,7 @@ graph TD
 2. **Device SDK Bronze Ingestion**: `generate_bronze_device_sdk.main()` reads from the raw volume and creates the bronze layer, then silver unwraps
 3. **Raw Transaction Generation**: `generate_raw_app_transactions.main()` generates raw unstructured data and writes JSON Lines (NDJSON) to `/Volumes/{catalog}/{schema}/raw_app_transactions/`, partitioned by yyyy/mm/dd
 4. **Transaction Bronze Ingestion**: `generate_bronze_app_transactions.main()` reads from the raw volume and creates the bronze layer, followed by silver → gold
-5. **Risk Baseline**: `risk_engine.main()` scores transactions, storing engine outputs (including `risk_reason_engine`) in `transaction_risk_engine`
+5. **Risk Baseline**: `risk_engine.main()` loads both `gold_app_transactions` and `gold_device_sdk`, joins on `subscriber_device_id`, scores using transaction and device risk features, and stores engine outputs (including `risk_reason_engine`) in `transaction_risk_engine`
 6. **Analyst Review**: `run_analyst_simulation.main()` simulates human review, producing `analyst_review` and the final `transaction_risk` table
 7. **Validation**: Confirms shared device IDs between pipelines
 
@@ -91,16 +93,18 @@ The pipeline implements a **medallion architecture** with progressive data refin
 - `silver_app_transactions`: Cleaned transactions with risk features
 
 ### Gold Layer
-**Purpose**: Business-ready data optimized for analytics
+**Purpose**: Business-ready data optimized for analytics and risk scoring
 
 **Characteristics**:
 - Business-focused columns
 - Risk features included (NO fraud labels)
 - Optimized for reporting and analytics
 - Subscriber location context preserved
+- One row per device in `gold_device_sdk` (latest snapshot)
 
 **Tables**:
 - `gold_app_transactions`: Business-ready transaction data
+- `gold_device_sdk`: Business-ready device data (one row per device); used by the risk engine for device-based risk signals
 
 ### Risk Layer
 **Purpose**: Independent fraud scoring and case management
@@ -233,7 +237,21 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 7. transaction_risk_engine
+### 7. gold_device_sdk
+**Purpose**: Business-ready device data (one row per device) for risk engine and analytics
+
+**Characteristics**:
+- One row per `subscriber_device_id` (latest `query_timestamp` per device)
+- Risk-relevant device attributes: encryption, VPN, SELinux, model, OS version, RAM, etc.
+- Used by the risk engine for device-based scoring (VPN, unencrypted, emulator, SELinux disabled)
+
+**Key Columns** (among others): `subscriber_device_id`, `query_timestamp`, `subscriber_device_encryption`, `subscriber_vpn_active`, `subscriber_vpn_connected`, `subscriber_selinux_status`, `subscriber_device_model`, `subscriber_os_version`, `subscriber_device_ram`, `subscriber_system_user`
+
+**Records**: 10,000 (one per device)
+
+---
+
+### 8. transaction_risk_engine
 **Purpose**: Engine-generated fraud scoring and case management
 
 **Key Columns**:
@@ -258,7 +276,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 8. analyst_review
+### 9. analyst_review
 **Purpose**: Simulated analyst review outcomes
 
 **Key Columns**:
@@ -274,7 +292,7 @@ The pipeline implements a **medallion architecture** with progressive data refin
 
 ---
 
-### 9. transaction_risk
+### 10. transaction_risk
 **Purpose**: Final fraud decisions merging engine and analyst outcomes
 
 **Characteristics**:
@@ -313,6 +331,15 @@ The risk engine calculates fraud scores (0-100) based on **12 risk indicators** 
 - **MFA Anomaly Score** (×0.15): Unusual MFA behavior patterns
 - **Profile Changes** (×3, max 15): Recent account modifications
 - **Low Device Trust** (×0.2, max 15): Compromised device indicators
+
+#### Device SDK–Based Indicators (from `gold_device_sdk`)
+- **VPN Active** (6 pts): Device VPN is active
+- **VPN Connected** (6 pts): Device VPN is connected
+- **Unencrypted Device** (10 pts): Device storage not encrypted
+- **SELinux Disabled** (10 pts): Security module disabled (e.g. rooted)
+- **Emulator** (12 pts): Device model indicates emulator (e.g. "SDK built for x86")
+
+The risk engine joins `gold_app_transactions` with `gold_device_sdk` on `subscriber_device_id` (left join) so transactions without a matching device are still scored; device-based points apply only when device data is present.
 
 ### Score Distribution & Labeling
 
@@ -414,18 +441,24 @@ When fraud is detected, the engine generates:
 ### Task 8: Gold_Transactions
 **Script**: `generate_gold_app_transactions.py`  
 **Dependencies**: Silver_Transactions  
-**Purpose**: Create business-ready data  
+**Purpose**: Create business-ready transaction data  
 **Output**: `gold_app_transactions` table
 
-### Task 9: Risk_Engine
+### Task 9: Gold_Device_SDK
+**Script**: `generate_gold_device_sdk.py`  
+**Dependencies**: Silver_Device_SDK  
+**Purpose**: Create business-ready device data (one row per device)  
+**Output**: `gold_device_sdk` table
+
+### Task 10: Risk_Engine
 **Script**: `risk_engine.py`  
-**Dependencies**: Gold_Transactions  
-**Purpose**: Calculate fraud scores and labels  
+**Dependencies**: Gold_Transactions, Gold_Device_SDK  
+**Purpose**: Load both gold tables, join on device ID, calculate fraud scores and labels (transaction + device signals)  
 **Output**: `transaction_risk_engine` table
 
-### Task 10: analyst_simulation
+### Task 11: analyst_simulation
 **Script**: `run_analyst_simulation.py`  
-**Dependencies**: Risk_Engine  
+**Dependencies**: Risk_Engine    
 **Purpose**: Simulate analyst review workflow  
 **Output**: `analyst_review` and `transaction_risk` tables
 
@@ -459,10 +492,13 @@ python notebooks/generate_silver_device_sdk.py --catalog telecommunications --sc
 # Create silver transaction layer
 python notebooks/generate_silver_app_transactions.py --catalog telecommunications --schema fraud_data
 
-# Create gold layer
+# Create gold transaction layer
 python notebooks/generate_gold_app_transactions.py --catalog telecommunications --schema fraud_data
 
-# Run risk engine
+# Create gold device layer (one row per device)
+python notebooks/generate_gold_device_sdk.py --catalog telecommunications --schema fraud_data
+
+# Run risk engine (uses both gold_app_transactions and gold_device_sdk)
 python notebooks/risk_engine.py --catalog telecommunications --schema fraud_data
 
 # Run analyst simulation
@@ -489,6 +525,7 @@ All tables are created in `telecommunications.fraud_data`:
 | `device_id_reference` | 10,000 | Master list of device IDs |
 | `bronze_device_sdk` | 10,000 | Raw device profiles with JSON report |
 | `silver_device_sdk` | 10,000 | Cleaned device data (50+ attributes) |
+| `gold_device_sdk` | 10,000 | Business-ready device data (one per device, for risk engine) |
 | `bronze_app_transactions` | 100,000 | Raw transactions with JSON report |
 | `silver_app_transactions` | 100,000 | Cleaned transactions with 35+ risk features |
 | `gold_app_transactions` | 100,000 | Business data with risk features |

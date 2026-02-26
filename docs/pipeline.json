@@ -67,6 +67,22 @@
       "environment_key": "fraud_data_pipeline_environment"
     },
     {
+      "task_key": "Gold_Device_SDK",
+      "depends_on": [
+        {
+          "task_key": "Silver_Device_SDK"
+        }
+      ],
+      "run_if": "ALL_SUCCESS",
+      "spark_python_task": {
+        "python_file": "/Workspace/Repos/<user>/<repo>/notebooks/generate_gold_device_sdk.py"
+      },
+      "timeout_seconds": 0,
+      "email_notifications": {},
+      "webhook_notifications": {},
+      "environment_key": "fraud_data_pipeline_environment"
+    },
+    {
       "task_key": "Silver_Transactions",
       "depends_on": [
         {
@@ -103,6 +119,9 @@
       "depends_on": [
         {
           "task_key": "Gold_Transactions"
+        },
+        {
+          "task_key": "Gold_Device_SDK"
         }
       ],
       "run_if": "ALL_SUCCESS",
