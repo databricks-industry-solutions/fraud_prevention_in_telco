@@ -26,13 +26,6 @@
         "  END AS fraud_score_category\n",
         "FROM telecommunications.fraud_data.transaction_risk"
       ]
-    },
-    {
-      "name": "0cd5d2c6",
-      "displayName": "analyst_review",
-      "queryLines": [
-        "SELECT * FROM telecommunications.fraud_data.analyst_review"
-      ]
     }
   ],
   "pages": [
@@ -40,118 +33,6 @@
       "name": "0c3f1310",
       "displayName": "Overview",
       "layout": [
-        {
-          "widget": {
-            "name": "table-of-fraud-root-causes",
-            "queries": [
-              {
-                "name": "main_query",
-                "query": {
-                  "datasetName": "e3a8d490",
-                  "fields": [
-                    {
-                      "name": "sum(case_exposure_usd)",
-                      "expression": "SUM(`case_exposure_usd`)"
-                    },
-                    {
-                      "name": "risk_reason_engine",
-                      "expression": "`risk_reason_engine`"
-                    },
-                    {
-                      "name": "count(*)",
-                      "expression": "COUNT(`*`)"
-                    }
-                  ],
-                  "filters": [
-                    {
-                      "expression": "IN_RANGE(`fraud_score`, 95D, 100D)"
-                    }
-                  ],
-                  "disaggregated": false
-                }
-              }
-            ],
-            "spec": {
-              "version": 3,
-              "frame": {
-                "title": "Autoblock common reasons",
-                "showTitle": true
-              },
-              "mark": {
-                "colors": [
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 4
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 2
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 3
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 4
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 5
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 6
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 7
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 8
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 9
-                  },
-                  {
-                    "themeColorType": "visualizationColors",
-                    "position": 10
-                  }
-                ]
-              },
-              "widgetType": "bar",
-              "encodings": {
-                "x": {
-                  "fieldName": "risk_reason_engine",
-                  "displayName": "Fraud score",
-                  "scale": {
-                    "type": "categorical"
-                  }
-                },
-                "y": {
-                  "fieldName": "count(*)",
-                  "displayName": "Count",
-                  "scale": {
-                    "type": "quantitative"
-                  }
-                },
-                "extra": [
-                  {
-                    "fieldName": "sum(case_exposure_usd)"
-                  }
-                ]
-              }
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 5,
-            "width": 3,
-            "height": 7
-          }
-        },
         {
           "widget": {
             "name": "cases-in-pipeline",
@@ -191,8 +72,8 @@
           },
           "position": {
             "x": 0,
-            "y": 19,
-            "width": 1,
+            "y": 17,
+            "width": 2,
             "height": 2
           }
         },
@@ -224,7 +105,7 @@
                   ],
                   "filters": [
                     {
-                      "expression": "`fraud_score_category` NOT IN ('95+') AND `fraud_score_category` IS NOT NULL"
+                      "expression": "IN_RANGE(`fraud_score`, 70D, 95D)"
                     }
                   ],
                   "disaggregated": false
@@ -233,6 +114,10 @@
             ],
             "spec": {
               "version": 3,
+              "frame": {
+                "title": "Pipeline ditribution",
+                "showTitle": true
+              },
               "widgetType": "bar",
               "encodings": {
                 "x": {
@@ -258,17 +143,13 @@
                     "fieldName": "sum(case_exposure_usd)"
                   }
                 ]
-              },
-              "frame": {
-                "title": "Pipeline ditribution",
-                "showTitle": true
               }
             }
           },
           "position": {
-            "x": 3,
-            "y": 21,
-            "width": 3,
+            "x": 6,
+            "y": 19,
+            "width": 6,
             "height": 6
           }
         },
@@ -300,22 +181,22 @@
             ],
             "spec": {
               "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Blocked innocent trasantions "
+              },
               "widgetType": "counter",
               "encodings": {
                 "value": {
                   "fieldName": "count(*)"
                 }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "FP cases"
               }
             }
           },
           "position": {
-            "x": 2,
-            "y": 3,
-            "width": 1,
+            "x": 4,
+            "y": 1,
+            "width": 2,
             "height": 2
           }
         },
@@ -435,8 +316,8 @@
           },
           "position": {
             "x": 0,
-            "y": 21,
-            "width": 3,
+            "y": 25,
+            "width": 6,
             "height": 6
           }
         },
@@ -461,6 +342,9 @@
                   "filters": [
                     {
                       "expression": "`mitigation_steps` IS NULL OR `mitigation_steps` NOT IN ('')"
+                    },
+                    {
+                      "expression": "IN_RANGE(`fraud_score`, 70D, 95D)"
                     }
                   ],
                   "disaggregated": false
@@ -469,6 +353,11 @@
             ],
             "spec": {
               "version": 3,
+              "frame": {
+                "title": "mitigation steps",
+                "showTitle": true,
+                "showDescription": true
+              },
               "widgetType": "pie",
               "encodings": {
                 "angle": {
@@ -487,18 +376,13 @@
                 "label": {
                   "show": true
                 }
-              },
-              "frame": {
-                "title": "mitigation steps",
-                "showTitle": true,
-                "showDescription": true
               }
             }
           },
           "position": {
-            "x": 3,
-            "y": 27,
-            "width": 3,
+            "x": 6,
+            "y": 25,
+            "width": 6,
             "height": 6
           }
         },
@@ -507,14 +391,14 @@
             "name": "d1373250",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Auto block engine: using rules to automatically block suspicious transactions </span></span>"
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size: 24px;\">Auto block engine: p(fraud)>95%  -> Auto block block </span></span>"
               ]
             }
           },
           "position": {
             "x": 0,
-            "y": 2,
-            "width": 6,
+            "y": 0,
+            "width": 12,
             "height": 1
           }
         },
@@ -546,27 +430,27 @@
             ],
             "spec": {
               "version": 2,
+              "style": {
+                "fontColor": {
+                  "dark": "#0FE929"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "$ Saved by auto block"
+              },
               "widgetType": "counter",
               "encodings": {
                 "value": {
                   "fieldName": "sum(case_exposure_usd)"
                 }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "Saved by auto block"
-              },
-              "style": {
-                "fontColor": {
-                  "dark": "#0FE929"
-                }
               }
             }
           },
           "position": {
-            "x": 1,
-            "y": 3,
-            "width": 1,
+            "x": 2,
+            "y": 1,
+            "width": 2,
             "height": 2
           }
         },
@@ -609,8 +493,8 @@
           },
           "position": {
             "x": 0,
-            "y": 3,
-            "width": 1,
+            "y": 1,
+            "width": 2,
             "height": 2
           }
         },
@@ -619,14 +503,14 @@
             "name": "0f6a0bd7",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Pipeline status</span>: <span style=\"font-size:24px\">using rules to flag suspicious transactions for analyst review</span></span>"
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Pipeline</span><span style=\"font-size:24px\"> 70%<p(fraud)<95%  -> Assign to analyst</span></span>"
               ]
             }
           },
           "position": {
             "x": 0,
-            "y": 18,
-            "width": 6,
+            "y": 16,
+            "width": 12,
             "height": 1
           }
         },
@@ -694,9 +578,9 @@
             }
           },
           "position": {
-            "x": 3,
-            "y": 6,
-            "width": 3,
+            "x": 6,
+            "y": 4,
+            "width": 6,
             "height": 6
           }
         },
@@ -728,27 +612,27 @@
             ],
             "spec": {
               "version": 2,
+              "style": {
+                "fontColor": {
+                  "dark": "#F10422"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "$ lost by blocking innocent tx"
+              },
               "widgetType": "counter",
               "encodings": {
                 "value": {
                   "fieldName": "sum(case_exposure_usd)"
                 }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "$ lost by false auto block"
-              },
-              "style": {
-                "fontColor": {
-                  "dark": "#F10422"
-                }
               }
             }
           },
           "position": {
-            "x": 3,
-            "y": 3,
-            "width": 1,
+            "x": 6,
+            "y": 1,
+            "width": 2,
             "height": 2
           }
         },
@@ -780,22 +664,22 @@
             ],
             "spec": {
               "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Fraud activities passed through engine"
+              },
               "widgetType": "counter",
               "encodings": {
                 "value": {
                   "fieldName": "count(*)"
                 }
-              },
-              "frame": {
-                "showTitle": true,
-                "title": "FN cases"
               }
             }
           },
           "position": {
-            "x": 4,
-            "y": 3,
-            "width": 1,
+            "x": 8,
+            "y": 1,
+            "width": 2,
             "height": 2
           }
         },
@@ -827,12 +711,6 @@
             ],
             "spec": {
               "version": 2,
-              "widgetType": "counter",
-              "encodings": {
-                "value": {
-                  "fieldName": "sum(case_exposure_usd)"
-                }
-              },
               "style": {
                 "fontColor": {
                   "dark": "#F60A28"
@@ -840,15 +718,21 @@
               },
               "frame": {
                 "showTitle": true,
-                "title": "$ lost by passing through auto block",
+                "title": "$ lost by passing through engine block",
                 "showDescription": false
+              },
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(case_exposure_usd)"
+                }
               }
             }
           },
           "position": {
-            "x": 5,
-            "y": 3,
-            "width": 1,
+            "x": 10,
+            "y": 1,
+            "width": 2,
             "height": 2
           }
         },
@@ -893,9 +777,9 @@
             }
           },
           "position": {
-            "x": 1,
-            "y": 19,
-            "width": 1,
+            "x": 2,
+            "y": 17,
+            "width": 2,
             "height": 2
           }
         },
@@ -940,9 +824,9 @@
             }
           },
           "position": {
-            "x": 2,
-            "y": 19,
-            "width": 1,
+            "x": 4,
+            "y": 17,
+            "width": 2,
             "height": 2
           }
         },
@@ -987,9 +871,9 @@
             }
           },
           "position": {
-            "x": 3,
-            "y": 19,
-            "width": 1,
+            "x": 6,
+            "y": 17,
+            "width": 2,
             "height": 2
           }
         },
@@ -1003,12 +887,21 @@
                   "datasetName": "e3a8d490",
                   "fields": [
                     {
+                      "name": "transaction_cost",
+                      "expression": "`transaction_cost`"
+                    },
+                    {
                       "name": "subscriber_location_lat",
                       "expression": "`subscriber_location_lat`"
                     },
                     {
                       "name": "subscriber_location_long",
                       "expression": "`subscriber_location_long`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "IN_RANGE(`fraud_score`, 95D, NULL)"
                     }
                   ],
                   "disaggregated": true
@@ -1026,14 +919,24 @@
                   "longitude": {
                     "fieldName": "subscriber_location_long"
                   }
+                },
+                "color": {
+                  "fieldName": "transaction_cost",
+                  "scale": {
+                    "type": "quantitative",
+                    "colorRamp": {
+                      "mode": "scheme",
+                      "scheme": "orangered"
+                    }
+                  }
                 }
               }
             }
           },
           "position": {
-            "x": 3,
-            "y": 12,
-            "width": 3,
+            "x": 6,
+            "y": 10,
+            "width": 6,
             "height": 6
           }
         },
@@ -1089,9 +992,9 @@
           },
           "position": {
             "x": 0,
-            "y": 12,
-            "width": 3,
-            "height": 6
+            "y": 3,
+            "width": 6,
+            "height": 13
           }
         },
         {
@@ -1112,12 +1015,22 @@
                       "expression": "`review_status`"
                     }
                   ],
+                  "filters": [
+                    {
+                      "expression": "IN_RANGE(`fraud_score`, 70D, 95D)"
+                    }
+                  ],
                   "disaggregated": false
                 }
               }
             ],
             "spec": {
               "version": 3,
+              "frame": {
+                "title": "Pipeline status ",
+                "showTitle": true,
+                "showDescription": true
+              },
               "widgetType": "pie",
               "encodings": {
                 "angle": {
@@ -1136,18 +1049,13 @@
                 "label": {
                   "show": true
                 }
-              },
-              "frame": {
-                "title": "Pipeline status ",
-                "showTitle": true,
-                "showDescription": true
               }
             }
           },
           "position": {
             "x": 0,
-            "y": 27,
-            "width": 3,
+            "y": 19,
+            "width": 6,
             "height": 6
           }
         },
@@ -1161,52 +1069,19 @@
             }
           },
           "position": {
-            "x": 3,
-            "y": 5,
-            "width": 3,
+            "x": 6,
+            "y": 3,
+            "width": 6,
             "height": 1
-          }
-        },
-        {
-          "widget": {
-            "name": "6470a384",
-            "multilineTextboxSpec": {
-              "lines": [
-                "<span style=\"font-size: 14px;\">total volume of cases </span>\n",
-                "\n",
-                "<span style=\"font-size: 14px;\">auto block definition </span><span style=\"font-size: 14px;\">pending cases definition </span>"
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 0,
-            "width": 6,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "b50ffad3",
-            "multilineTextboxSpec": {
-              "lines": [
-                "AI\\_QUERY ELEMET "
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 33,
-            "width": 6,
-            "height": 2
           }
         }
       ],
-      "pageType": "PAGE_TYPE_CANVAS"
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
     },
     {
       "name": "dd6a32e3",
-      "displayName": "auto blocked",
+      "displayName": "auto blocked cases",
       "layout": [
         {
           "widget": {
