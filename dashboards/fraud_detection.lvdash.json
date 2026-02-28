@@ -105,14 +105,14 @@
   "pages": [
     {
       "name": "7a7d6955",
-      "displayName": "Fraud Risk Engine — How It Works",
+      "displayName": "Overview",
       "layout": [
         {
           "widget": {
-            "name": "engine-page-title",
+            "name": "fbc7a3d9",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"font-size:20px;font-weight:600;display:block;margin-bottom:8px\">Fraud Risk Engine — How It Works</span><span style=\"font-size:14px;line-height:1.5;color:#424242\">The risk engine scores every transaction (0–100) using <strong>transaction</strong>, <strong>device SDK</strong>, and <strong>network</strong> data. This page explains the data sources, score bands, and rule set.</span>"
+                "![](https://e2-demo-west.cloud.databricks.com/ajax-api/2.0/fs/files/Volumes/telecommunications/fraud_data/image/frauddiagram.png)"
               ]
             }
           },
@@ -120,55 +120,7 @@
             "x": 0,
             "y": 0,
             "width": 12,
-            "height": 1
-          }
-        },
-        {
-          "widget": {
-            "name": "engine-data-sources",
-            "multilineTextboxSpec": {
-              "lines": [
-                "<span style=\"font-size:13px;font-weight:600;display:block;margin-bottom:6px;color:#1565C0\">Data sources</span><span style=\"font-size:13px;line-height:1.5;display:block\"><strong>Transaction data</strong> — App and purchase events: SIM swap, high-value orders, MFA status, login failures, password resets, profile changes, dark-web breach flags, and velocity/after-hours signals.<br/><strong>Device SDK</strong> — Device trust and security: VPN (active/connected), encryption status, SELinux status, emulator detection (e.g. \"SDK built for x86\").<br/><strong>Network data (CDR-like)</strong> — Cell and location context: impossible travel between cells, cell country vs IP country, rapid cell hop, roaming anomalies.</span>"
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 1,
-            "width": 12,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "engine-how-it-works",
-            "multilineTextboxSpec": {
-              "lines": [
-                "<span style=\"font-size:13px;font-weight:600;display:block;margin-bottom:6px;color:#1565C0\">How the engine works</span><span style=\"font-size:13px;line-height:1.6;display:block\"><strong style=\"color:#2E7D32\">Pass</strong> (score &lt; 70) — Transaction is cleared with no action.<br/><strong style=\"color:#F57C00\">Triage (review)</strong> (score 70–95) — Transaction is queued for analyst review (pending → reviewed or escalated).<br/><strong style=\"color:#C62828\">Auto-block</strong> (score ≥ 95) — Transaction is blocked automatically; no analyst step.</span>"
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 3,
-            "width": 12,
-            "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "engine-rules-list",
-            "multilineTextboxSpec": {
-              "lines": [
-                "<span style=\"font-size:13px;font-weight:600;display:block;margin-bottom:6px;color:#1565C0\">List of rules (risk reasons)</span><span style=\"font-size:12px;line-height:1.5;display:block\"><strong>Transaction:</strong> SIM swap detected (20 pts), High value transaction (12), MFA disabled (10), Dark web breach exposure (18), Login failure burst (12), After hours activity (5), Geo velocity anomaly (15/+10), Profile change spike (×3, max 15).<br/><strong>Device:</strong> VPN active/connected (+6 each), Unencrypted device (10), SELinux disabled (10), Emulator / \"SDK built for x86\" (12).<br/><strong>Network:</strong> Impossible travel high (15), High implied speed / &gt;250 km/h (8), Cell vs IP location mismatch (10), Rapid cell tower hop (12), Roaming / country jump anomaly (10).<br/><strong>Other:</strong> Composite risk signals (combined lower-weight indicators).</span>"
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 5,
-            "width": 12,
-            "height": 3
+            "height": 13
           }
         }
       ],
@@ -221,25 +173,9 @@
           },
           "position": {
             "x": 4,
-            "y": 2,
+            "y": 1,
             "width": 2,
             "height": 2
-          }
-        },
-        {
-          "widget": {
-            "name": "d1373250",
-            "multilineTextboxSpec": {
-              "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Auto block engine: if </span><span style=\"font-size:24px\">**p(fraud)>95%**</span><span style=\"font-size:24px\">  -> block transaction</span></span>"
-              ]
-            }
-          },
-          "position": {
-            "x": 0,
-            "y": 1,
-            "width": 12,
-            "height": 1
           }
         },
         {
@@ -289,7 +225,7 @@
           },
           "position": {
             "x": 2,
-            "y": 2,
+            "y": 1,
             "width": 2,
             "height": 2
           }
@@ -333,7 +269,7 @@
           },
           "position": {
             "x": 0,
-            "y": 2,
+            "y": 1,
             "width": 2,
             "height": 2
           }
@@ -403,7 +339,7 @@
           },
           "position": {
             "x": 6,
-            "y": 6,
+            "y": 5,
             "width": 6,
             "height": 6
           }
@@ -449,14 +385,24 @@
               "widgetType": "counter",
               "encodings": {
                 "value": {
-                  "fieldName": "sum(case_exposure_usd)"
+                  "fieldName": "sum(case_exposure_usd)",
+                  "style": {
+                    "rules": [
+                      {
+                        "condition": {
+                          "operator": ">="
+                        },
+                        "color": "#00A972"
+                      }
+                    ]
+                  }
                 }
               }
             }
           },
           "position": {
             "x": 6,
-            "y": 2,
+            "y": 1,
             "width": 2,
             "height": 2
           }
@@ -503,7 +449,7 @@
           },
           "position": {
             "x": 8,
-            "y": 2,
+            "y": 1,
             "width": 2,
             "height": 2
           }
@@ -556,7 +502,7 @@
           },
           "position": {
             "x": 10,
-            "y": 2,
+            "y": 1,
             "width": 2,
             "height": 2
           }
@@ -619,7 +565,7 @@
           },
           "position": {
             "x": 6,
-            "y": 12,
+            "y": 11,
             "width": 6,
             "height": 6
           }
@@ -676,7 +622,7 @@
           },
           "position": {
             "x": 0,
-            "y": 4,
+            "y": 3,
             "width": 6,
             "height": 14
           }
@@ -694,7 +640,7 @@
           },
           "position": {
             "x": 6,
-            "y": 4,
+            "y": 3,
             "width": 6,
             "height": 2
           }
@@ -1111,7 +1057,7 @@
     },
     {
       "name": "696da17b",
-      "displayName": "Leadership view - Cases under review",
+      "displayName": "Managemnet view - Cases under review",
       "layout": [
         {
           "widget": {
@@ -2118,7 +2064,7 @@
           },
           "position": {
             "x": 0,
-            "y": 11,
+            "y": 12,
             "width": 12,
             "height": 6
           }
@@ -2216,17 +2162,15 @@
             "name": "229583e9",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Review Auto-blocked Cases </span></span>\n",
-                "\n",
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:18px\">(10% of auto-blocked cases randomely chosen to be reveiwed by engine)</span></span>"
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">1) Auto-blocked Cases </span><span style=\"font-size:18px\"> </span><span style=\"font-size:18px\">(10% of auto-blocked cases randomely chosen to be reveiwed by engine)</span></span>"
               ]
             }
           },
           "position": {
             "x": 0,
-            "y": 1,
+            "y": 4,
             "width": 12,
-            "height": 2
+            "height": 1
           }
         },
         {
@@ -2234,17 +2178,15 @@
             "name": "3e124bc4",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Review Medium Confidence Cases </span></span>\n",
-                "\n",
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:18px\">(Cases with confidence of 70%-95% that has been flagged by engine but not automatically blcoked)</span></span>"
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">2) Medium Confidence Cases </span><span style=\"font-size:18px\"> </span><span style=\"font-size:18px\">(Cases with confidence of 70%-95% that has been flagged by engine)</span></span>"
               ]
             }
           },
           "position": {
             "x": 0,
-            "y": 9,
+            "y": 11,
             "width": 12,
-            "height": 2
+            "height": 1
           }
         },
         {
@@ -2399,7 +2341,7 @@
           },
           "position": {
             "x": 0,
-            "y": 3,
+            "y": 5,
             "width": 12,
             "height": 6
           }
@@ -2497,7 +2439,7 @@
             "name": "087b6b47",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Review Lost Cases - Group 1</span></span>\n",
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">3 -1 ) Lost Cases - FP</span></span>\n",
                 "\n",
                 "<span style=\"text-align:center;display:block\"><span style=\"font-size:18px\">False Positive Cases - cases blocked that should not have been blocked </span></span>\n",
                 "\n",
@@ -2507,7 +2449,7 @@
           },
           "position": {
             "x": 0,
-            "y": 17,
+            "y": 18,
             "width": 6,
             "height": 3
           }
@@ -2582,7 +2524,7 @@
               "version": 2,
               "rowsPerPage": 25,
               "frame": {
-                "title": "Group1",
+                "title": "Group 3-1",
                 "showTitle": true
               },
               "widgetType": "table",
@@ -2637,7 +2579,7 @@
           },
           "position": {
             "x": 0,
-            "y": 20,
+            "y": 21,
             "width": 12,
             "height": 6
           }
@@ -2647,17 +2589,17 @@
             "name": "c4cd6a38",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">Review Lost Cases - Group 2</span></span>\n",
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:24px\">3-2) Lost Cases - fn</span></span>\n",
                 "\n",
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size: 18px;\">False Negative Cases - cases engine missed that should have been blocked </span></span>\n",
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:18px\">False Negative Cases - cases engine missed that should have been blocked </span></span>\n",
                 "\n",
-                "<span style=\"text-align:center;display:block\"><span style=\"font-size: 18px;\">Action: review and suggest improvement to auto block engine (add rule)</span></span>"
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:18px\">Action: review and suggest improvement to auto block engine (add rule)</span></span>"
               ]
             }
           },
           "position": {
             "x": 6,
-            "y": 17,
+            "y": 18,
             "width": 6,
             "height": 3
           }
@@ -2732,7 +2674,7 @@
               "version": 2,
               "rowsPerPage": 25,
               "frame": {
-                "title": "Group2",
+                "title": "Group 3-2",
                 "showTitle": true
               },
               "widgetType": "table",
@@ -2804,7 +2746,7 @@
           },
           "position": {
             "x": 0,
-            "y": 26,
+            "y": 27,
             "width": 12,
             "height": 6
           }
@@ -2874,6 +2816,24 @@
             "y": 0,
             "width": 5,
             "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "f9c4559d",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:18px\">In this view, analysts can filter the cases assigned to them and begin reviewing them within three categories. To support their work, analysts can utilize a </span>[<span style=\"font-size:18px\">knowledge assistant agent </span>](https://e2-demo-west.cloud.databricks.com/ml/bricks/ka/configure/6e1650dd-e57c-489e-b7f7-9734eb0c978f?o=2556758628403379)<span style=\"font-size:18px\">trained on the fraud operations guideline.</span>\n",
+                "\n",
+                "<br><span style=\"font-size:18px\">- 10% of auto-blocked cases require analyst review to maintain engine health.</span><br><span style=\"font-size:18px\">- Cases with medium confidence necessitate analyst review for action to be taken.</span><br><span style=\"font-size:18px\">- Lost cases include both false positive and false negative scenarios.</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 12,
+            "height": 3
           }
         }
       ],
