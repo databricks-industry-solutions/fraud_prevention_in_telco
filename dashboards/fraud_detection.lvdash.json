@@ -105,14 +105,14 @@
   "pages": [
     {
       "name": "7a7d6955",
-      "displayName": "What is this Dashbaord",
+      "displayName": "Fraud Risk Engine — How It Works",
       "layout": [
         {
           "widget": {
-            "name": "6e353a10",
+            "name": "engine-page-title",
             "multilineTextboxSpec": {
               "lines": [
-                "<span style=\"font-size:14px;line-height:1.4;display:block\"><strong>Risk engine</strong> scores each transaction (0–100) from <strong>transaction</strong>, <strong>device</strong>, and <strong>network</strong> data. Score ≥95 → <strong>blocked</strong>; 70–95 → <strong>flagged</strong> for analyst review; &lt;70 → passed.<br/><br/><strong>Transaction</strong> (e.g. SIM swap, high value, MFA): SIM swap detected (20 pts), high-value device/service purchase (12 pts), recent login failure burst (12 pts).<br/><strong>Device</strong> (SDK): VPN active/connected (+6 pts each), unencrypted device (10 pts), emulator / \"SDK built for x86\" (12 pts).<br/><strong>Network</strong> (CDR/cell): Impossible travel (e.g. &gt;250 km/h between cells), cell country ≠ IP country, rapid cell hop (&gt;50 km in &lt;5 min), roaming anomaly (multiple countries in short window).</span>"
+                "<span style=\"font-size:20px;font-weight:600;display:block;margin-bottom:8px\">Fraud Risk Engine — How It Works</span><span style=\"font-size:14px;line-height:1.5;color:#424242\">The risk engine scores every transaction (0–100) using <strong>transaction</strong>, <strong>device SDK</strong>, and <strong>network</strong> data. This page explains the data sources, score bands, and rule set.</span>"
               ]
             }
           },
@@ -120,7 +120,55 @@
             "x": 0,
             "y": 0,
             "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "engine-data-sources",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:13px;font-weight:600;display:block;margin-bottom:6px;color:#1565C0\">Data sources</span><span style=\"font-size:13px;line-height:1.5;display:block\"><strong>Transaction data</strong> — App and purchase events: SIM swap, high-value orders, MFA status, login failures, password resets, profile changes, dark-web breach flags, and velocity/after-hours signals.<br/><strong>Device SDK</strong> — Device trust and security: VPN (active/connected), encryption status, SELinux status, emulator detection (e.g. \"SDK built for x86\").<br/><strong>Network data (CDR-like)</strong> — Cell and location context: impossible travel between cells, cell country vs IP country, rapid cell hop, roaming anomalies.</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 12,
             "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "engine-how-it-works",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:13px;font-weight:600;display:block;margin-bottom:6px;color:#1565C0\">How the engine works</span><span style=\"font-size:13px;line-height:1.6;display:block\"><strong style=\"color:#2E7D32\">Pass</strong> (score &lt; 70) — Transaction is cleared with no action.<br/><strong style=\"color:#F57C00\">Triage (review)</strong> (score 70–95) — Transaction is queued for analyst review (pending → reviewed or escalated).<br/><strong style=\"color:#C62828\">Auto-block</strong> (score ≥ 95) — Transaction is blocked automatically; no analyst step.</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "engine-rules-list",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:13px;font-weight:600;display:block;margin-bottom:6px;color:#1565C0\">List of rules (risk reasons)</span><span style=\"font-size:12px;line-height:1.5;display:block\"><strong>Transaction:</strong> SIM swap detected (20 pts), High value transaction (12), MFA disabled (10), Dark web breach exposure (18), Login failure burst (12), After hours activity (5), Geo velocity anomaly (15/+10), Profile change spike (×3, max 15).<br/><strong>Device:</strong> VPN active/connected (+6 each), Unencrypted device (10), SELinux disabled (10), Emulator / \"SDK built for x86\" (12).<br/><strong>Network:</strong> Impossible travel high (15), High implied speed / &gt;250 km/h (8), Cell vs IP location mismatch (10), Rapid cell tower hop (12), Roaming / country jump anomaly (10).<br/><strong>Other:</strong> Composite risk signals (combined lower-weight indicators).</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 12,
+            "height": 3
           }
         }
       ],
