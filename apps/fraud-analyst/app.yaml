@@ -1,0 +1,25 @@
+command:
+  - "python"
+  - "-m"
+  - "uvicorn"
+  - "app:app"
+  - "--host"
+  - "0.0.0.0"
+  - "--port"
+  - "8000"
+
+env:
+  - name: PGHOST
+    value: "instance-6f667f8e-b765-4f5e-b450-e6a87e47a731.database.cloud.databricks.com"
+  - name: PGDATABASE
+    value: "databricks_postgres"
+  - name: PGSCHEMA
+    value: "fraud_data"
+  - name: PGPORT
+    value: "5432"
+  - name: PGUSER
+    value: "c811ac7d-fa54-466f-a39c-6caae047e57b"
+  - name: WAREHOUSE_ID
+    value: "e9b34f7a2e4b0561"
+  - name: SERVING_ENDPOINT
+    value: "databricks-claude-sonnet-4-5"
