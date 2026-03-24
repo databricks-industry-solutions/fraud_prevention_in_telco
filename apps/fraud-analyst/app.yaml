@@ -1,0 +1,38 @@
+command:
+  - "python"
+  - "-m"
+  - "uvicorn"
+  - "app:app"
+  - "--host"
+  - "0.0.0.0"
+  - "--port"
+  - "8000"
+
+# Fill in your values before deploying. See README.md.
+env:
+  - name: PGHOST
+    value: "<your-lakebase-instance>.database.cloud.databricks.com"
+  - name: PGDATABASE
+    value: "databricks_postgres"
+  - name: PGSCHEMA
+    value: "fraud_data"
+  - name: PGPORT
+    value: "5432"
+  - name: PGUSER
+    value: "<your-app-service-principal-application-id>"
+  - name: LAKEBASE_INSTANCE
+    value: "<your-lakebase-instance-name>"
+  - name: PGPASSWORD_SECRET_SCOPE
+    value: "<your-secret-scope>"
+  - name: PGPASSWORD_SECRET_KEY
+    value: "<your-secret-key>"
+  - name: WAREHOUSE_ID
+    value: "<your-warehouse-id>"
+  - name: SERVING_ENDPOINT
+    value: "databricks-claude-sonnet-4-5"
+
+resources:
+  - name: sql-warehouse
+    sql_warehouse:
+      id: "<your-warehouse-id>"
+      permission: CAN_USE

@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+node_modules/
+.databricks/
+.DS_Store
+
+# Local app.yaml with real credentials — use app.yaml.example as template
+# Uncomment the next line if you keep a local app.yaml with real values:
+# app.yaml
