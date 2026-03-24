@@ -679,7 +679,7 @@ All tables are created in `telecommunications.fraud_data`:
 
 ### Authentication Issues
 ```bash
-databricks auth login -p e2-demo-west --host https://e2-demo-west.cloud.databricks.com/
+databricks auth login -p <your-profile> --host https://<your-workspace>.cloud.databricks.com/
 ```
 
 ### TLS Certificate Errors
