@@ -23,16 +23,13 @@ targets:
   dev:
     default: true
     mode: development
-    workspace:
-      profile: e2-demo-west
+    # Set your workspace profile: databricks bundle deploy -p <your-profile>
     variables:
       catalog: "telecommunications"
       schema: "fraud_data"
 
   prod:
     mode: production
-    workspace:
-      profile: e2-demo-west
     variables:
       catalog: "telecommunications"
       schema: "fraud_data"

@@ -1,91 +1,156 @@
-# Telecom Fraud Detection Data Pipeline
+# Telecom Fraud Detection & Prevention
 
 [![Databricks](https://img.shields.io/badge/Databricks-Solution_Accelerator-FF3621?style=for-the-badge&logo=databricks)](https://databricks.com)
 [![Unity Catalog](https://img.shields.io/badge/Unity_Catalog-Enabled-00A1C9?style=for-the-badge)](https://docs.databricks.com/en/data-governance/unity-catalog/index.html)
-[![Serverless](https://img.shields.io/badge/Serverless-Compute-00C851?style=for-the-badge)](https://docs.databricks.com/en/compute/serverless.html)
+[![Lakebase](https://img.shields.io/badge/Lakebase-Postgres_Interface-336791?style=for-the-badge)](https://docs.databricks.com/en/database/lakebase/)
+[![Databricks Apps](https://img.shields.io/badge/Databricks_Apps-React_+_FastAPI-61DAFB?style=for-the-badge)](https://docs.databricks.com/en/dev-tools/databricks-apps/)
 
-A Databricks Asset Bundle implementing a **medallion architecture** (Bronze → Silver → Gold) for generating synthetic telecom fraud detection data.
+End-to-end fraud prevention on Databricks — from data pipeline to analyst workbench to AI investigation agent.
 
 ## What It Does
 
-Generates synthetic fraud detection data across three pipelines:
+- **Data Pipeline**: Medallion architecture (Bronze/Silver/Gold) generating 100K synthetic transactions and 10K device profiles with fraud scoring
+- **Fraud Analyst Workbench**: Three role-based views (Executive, Management, Analyst) backed by Lakebase, Genie Spaces, Knowledge Assistants, and Foundation Model API
+- **AI Agent**: ReAct-style investigation assistant with 5 database-backed tools
 
-- **Device SDK**: Device profiles (raw → bronze → silver → gold) for device-based risk signals.
-- **Transactions**: App transaction data (raw → bronze → silver → gold) with risk features.
-- **Network (CDR-like)**: Network activity records (raw → bronze → silver → gold) with cell/location context for impossible-travel and location rules.
+**Default: Telecom Fraud.** The app is industry-configurable — edit `apps/fraud-analyst/server/industry_config.py` to retarget for fintech, insurance, e-commerce, or any scored risk/fraud use case. See [`apps/fraud-analyst/README.md`](apps/fraud-analyst/README.md) for the full app setup guide.
 
-The **risk engine** scores transactions using all three gold tables (transactions, device SDK, network), with rules for impossible travel, cell–IP mismatch, rapid cell hop, roaming anomalies, device signals (VPN, encryption, emulator), and transaction risk features. Output feeds analyst assignment and dashboards.
+## Architecture
 
-**Configuration**: Uses `telecommunications` catalog and `fraud_data` schema by default. Both can be changed via job parameters.
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Databricks Workspace                      │
+│                                                              │
+│  ┌──────────┐  ┌─────────┐  ┌─────────┐  ┌───────────┐    │
+│  │  Volumes  │─▶│ Bronze  │─▶│ Silver  │─▶│   Gold    │    │
+│  │ (NDJSON)  │  │ Tables  │  │ Tables  │  │  Tables   │    │
+│  └──────────┘  └─────────┘  └─────────┘  └─────┬─────┘    │
+│                                                  ▼          │
+│                                           ┌───────────┐     │
+│                                           │Risk Engine│     │
+│                                           └─────┬─────┘     │
+│                                                 ▼           │
+│                                        ┌──────────────┐     │
+│                                        │ Delta Tables  │     │
+│                                        │(Unity Catalog)│     │
+│                                        └──────┬───────┘     │
+│                                               │ CDF Sync    │
+│                                               ▼             │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │               Lakebase (Postgres)                     │   │
+│  │  Synced: transactions_synced, device_sdk_synced       │   │
+│  │  Writable: analyst_review, decision_audit_log         │   │
+│  └────────────────────┬─────────────────────────────────┘   │
+│                       │ asyncpg                              │
+│                       ▼                                      │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │            FastAPI Backend (Databricks App)            │   │
+│  │  /api/executive  /api/dashboard  /api/cases  /api/chat│   │
+│  └────────────────────┬─────────────────────────────────┘   │
+│                       │                                      │
+│  ┌────────┐  ┌───────▼──────┐  ┌─────────┐  ┌──────────┐  │
+│  │ Genie  │  │React Frontend│  │  FMAPI  │  │    KA    │  │
+│  │ Space  │  │  (3 views)   │  │ (Agent) │  │(Playbook)│  │
+│  └────────┘  └──────────────┘  └─────────┘  └──────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │       Foundation Model API (Claude Sonnet 4.5)        │   │
+│  │  Tool-calling agent for fraud investigation           │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+```
 
-## Installation Guidelines
-
-1. **Clone** the project into your Databricks workspace (or clone locally and use the Databricks CLI).
-2. **Open** the Asset Bundle Editor in the Databricks UI (or use the CLI from the project root).
-3. **Deploy**: Click "Deploy" in the UI, or run `databricks bundle deploy`.
-4. **Run**: In the Deployments tab (🚀), click "Run" on the **Fraud Data Pipeline** job, or run `databricks bundle run fraud_data_pipeline`.
-
-The pipeline runs 17 tasks and generates raw unstructured data plus all tables (including cell registry, fraud analyst roster, and network CDR-like data) for the Fraud Detection dashboard and downstream applications.
-
-## Quick Start (CLI)
+## Quick Start
 
 ### Prerequisites
 
-```bash
-pip install databricks-cli
-databricks auth login -p <your-profile> --host https://<workspace>.cloud.databricks.com/
-```
-
-Copy `env.example` to `.env` and set your profile if needed. See `.databrickscfg.example` for host/auth.
-
-### Deploy and Run
+- Databricks workspace with Unity Catalog enabled
+- Databricks CLI v0.229+: `pip install databricks-cli`
 
 ```bash
-databricks bundle validate
-databricks bundle deploy
-databricks bundle run fraud_data_pipeline
+databricks auth login --profile <your-profile> --host https://<workspace>.cloud.databricks.com/
 ```
+
+### 1. Deploy the Data Pipeline
+
+```bash
+databricks bundle validate -p <your-profile>
+databricks bundle deploy -p <your-profile>
+databricks bundle run fraud_data_pipeline -p <your-profile>
+```
+
+The pipeline runs 17 tasks generating 100K transactions, 10K device profiles, network CDR data, and fraud scores. Uses `telecommunications` catalog and `fraud_data` schema by default — change in `databricks.yml`.
+
+### 2. Deploy the Fraud Analyst App
+
+See [`apps/fraud-analyst/README.md`](apps/fraud-analyst/README.md) for the full setup guide. Summary:
+
+1. Create a Lakebase instance and sync the Delta tables
+2. Create a Genie Space pointing at the case data
+3. Create a Knowledge Assistant with your fraud playbooks (optional)
+4. Edit `apps/fraud-analyst/app.yaml` with your connection details
+5. Deploy:
+
+```bash
+# Upload app to workspace
+databricks workspace import-dir apps/fraud-analyst \
+  /Workspace/Users/<you>/fraud-analyst --overwrite -p <your-profile>
+
+# Create and deploy the app
+databricks apps create <app-name> -p <your-profile>
+databricks apps deploy <app-name> \
+  --source-code-path /Workspace/Users/<you>/fraud-analyst -p <your-profile>
+```
+
+## Fraud Analyst Workbench
+
+Three role-based views, each with dedicated AI capabilities:
+
+| View | Audience | Key Features |
+|------|----------|-------------|
+| **Executive** | C-suite, VP | Financial P&L, quarterly trends, regional teams, risk distribution, **Genie Space** chat |
+| **Management** | Fraud ops managers | Pipeline health, **AI forecast** (30-day), engine performance, team metrics, SLA tracking, mitigation effectiveness |
+| **Analyst** | Fraud investigators | Case queue, case detail + device profile, **AI investigation agent** (tool-calling), **Knowledge Assistant** (company playbook) |
+
+**Industry-configurable**: All domain-specific values (thresholds, mitigations, AI prompts, Genie/KA endpoints) live in `server/industry_config.py`.
+
+### Data Flow
+
+**Read path (sub-200ms):** Browser → FastAPI → asyncpg → Lakebase → Response
+
+**Write path (dual write):** Analyst decisions → Lakebase `analyst_review` (immediate) + Delta write-back via SQL Statement API (eventual consistency via CDF)
+
+**Agent path:** Browser → FastAPI → Foundation Model API (tool-calling) → Lakebase query → Response
+
+### Security
+
+| Control | Implementation |
+|---------|---------------|
+| SQL Injection | Parameterized queries (`$1`, `$2`) via asyncpg |
+| Input Validation | Pydantic `Literal` on decisions; `Field(max_length=...)` on strings; regex on path params |
+| Rate Limiting | `slowapi` on all API endpoints |
+| CORS | Same-origin only (`allow_origins=[]`) |
+| Credentials | Databricks Secrets API (no plaintext passwords) |
+| Authentication | OAuth + Service Principal (remote) / CLI profile (local) |
+| Credential Rotation | asyncpg pool rebuilt every 45 minutes for token refresh |
 
 ## Pipeline Flow
 
 ```
 Device_ID_Reference
     ├─> Cell_Registry
-    │       └─> Raw_Network_Data ─> Bronze_Network_Data ─> Silver_Network_Data ─> Gold_Network_Data ─┐
-    ├─> Raw_Device_SDK ─> Bronze_Device_SDK ─> Silver_Device_SDK ─> Gold_Device_SDK ────────────────┤
-    └─> Raw_App_Transactions ─> Bronze_Transactions ─> Silver_Transactions ─> Gold_Transactions ──┴─> Risk_Engine ─> analyst_assignment
+    │       └─> Raw_Network_Data ─> Bronze ─> Silver ─> Gold_Network_Data ─┐
+    ├─> Raw_Device_SDK ─> Bronze ─> Silver ─> Gold_Device_SDK ─────────────┤
+    └─> Raw_App_Transactions ─> Bronze ─> Silver ─> Gold_Transactions ───┴─> Risk_Engine ─> analyst_assignment
 ```
 
-All three gold tables (Gold_Transactions, Gold_Device_SDK, Gold_Network_Data) feed the **Risk Engine**, which applies transaction, device, and network rules (e.g. impossible travel, cell–IP mismatch, rapid cell hop, roaming anomaly, VPN/emulator) and writes `transaction_risk_engine`.
-
-Raw data is written as JSON Lines (NDJSON) before Bronze ingestion (paths use the configured catalog/schema):
-- Device profiles: `/Volumes/{catalog}/{schema}/raw_device_sdk/`
-- Transactions: `/Volumes/{catalog}/{schema}/raw_app_transactions/`
-- Network (CDR-like): `/Volumes/{catalog}/{schema}/raw_network_data/`
-
-## Common Commands
-
-```bash
-# Deploy changes
-databricks bundle deploy --force
-
-# Run pipeline
-databricks bundle run fraud_data_pipeline
-
-# Deploy/run via script (blueprint style)
-./scripts/deploy.sh dev deploy
-./scripts/deploy.sh dev run
-
-# Production deployment
-databricks bundle deploy -t prod
-databricks bundle run fraud_data_pipeline -t prod
-```
+All three gold tables feed the **Risk Engine**, which applies transaction, device, and network rules (impossible travel, cell–IP mismatch, rapid cell hop, roaming anomaly, VPN/emulator) and writes `transaction_risk_engine`.
 
 ## Configuration
 
 ### Catalog and Schema
 
-The pipeline uses **`telecommunications`** as the catalog and **`fraud_data`** as the schema by default. You can override these by editing `databricks.yml`:
+Default: **`telecommunications.fraud_data`**. Override in `databricks.yml`:
 
 ```yaml
 variables:
@@ -93,56 +158,76 @@ variables:
   schema: "your_schema"
 ```
 
-These variables are passed as job parameters to all pipeline tasks. Tables, volumes, and raw data paths all use the configured catalog and schema.
+### App Industry Configuration
 
-Then redeploy: `databricks bundle deploy --force`.
+Edit `apps/fraud-analyst/server/industry_config.py` to change:
+- Score thresholds, risk buckets, mitigation actions
+- AI agent system prompt and domain knowledge
+- Genie Space ID, Knowledge Assistant endpoint, LLM model
+- Table names, status labels, decision values
 
-### SQL Warehouse
+See [`apps/fraud-analyst/README.md`](apps/fraud-analyst/README.md) for details.
 
-The dashboard uses the SQL warehouse defined by `warehouse_id` in `databricks.yml` (default: **Shared Endpoint**). To use a different warehouse, set the `warehouse_id` lookup to your warehouse name. The dashboard is deployed with the bundle when you run `databricks bundle deploy`.
+## Project Structure
+
+```
+fraud_prevention_in_telco/
+├── databricks.yml                          # Asset Bundle config (pipeline + dashboard)
+├── notebooks/                              # Pipeline tasks (17 Python scripts)
+├── dashboards/                             # AI/BI dashboard (fraud_detection.lvdash.json)
+├── scripts/                                # deploy.sh, run_job.py
+├── docs/                                   # PIPELINE_DETAILS.md, pipeline.json
+├── apps/fraud-analyst/
+│   ├── app.yaml                            # Databricks App manifest
+│   ├── app.py                              # FastAPI entry point
+│   ├── README.md                           # App setup guide
+│   ├── server/
+│   │   ├── industry_config.py              # ★ Industry-specific configuration
+│   │   ├── config.py                       # Workspace auth
+│   │   ├── db.py                           # Lakebase + Delta connections
+│   │   ├── llm.py                          # Foundation Model API client
+│   │   ├── models.py                       # Pydantic models
+│   │   ├── agent/                          # ReAct agent + 5 tools
+│   │   └── routes/
+│   │       ├── cases.py                    # Analyst view API
+│   │       ├── dashboard.py                # Management view API
+│   │       ├── executive.py                # Executive view API
+│   │       └── chat.py                     # AI chat + Knowledge Assistant
+│   └── frontend/
+│       ├── src/                            # React source (TypeScript)
+│       └── dist/                           # Pre-built frontend
+├── CONTRIBUTING.md
+└── SECURITY.md
+```
 
 ## Documentation
 
-- **[docs/PIPELINE_DETAILS.md](docs/PIPELINE_DETAILS.md)** – Pipeline design, table schemas, fraud detection logic
-- **[databricks.yml](databricks.yml)** – Bundle configuration, job, and dashboards (single file, blueprint style)
-
-## Project Structure (Industry Solutions Blueprint)
-
-```
-datapipeline/
-├── databricks.yml       # Bundle config, variables, jobs, dashboards (single file)
-├── notebooks/           # Pipeline Python scripts (job tasks run from here)
-├── dashboards/          # AI/BI dashboard (fraud_detection.lvdash.json)
-├── scripts/             # deploy.sh, run_job.py (workspace job reset)
-├── apps/                # Optional Databricks apps (placeholder)
-├── docs/                # PIPELINE_DETAILS.md, pipeline.json
-├── .github/             # GitHub workflows (optional)
-├── env.example          # Example env vars for bundle
-└── requirements.txt    # Python dependencies
-```
+- **[apps/fraud-analyst/README.md](apps/fraud-analyst/README.md)** — App setup, prerequisites, per-view data mapping
+- **[docs/PIPELINE_DETAILS.md](docs/PIPELINE_DETAILS.md)** — Pipeline design, table schemas, fraud detection logic
+- **[databricks.yml](databricks.yml)** — Bundle configuration (pipeline job + dashboard)
 
 ## Contributing
 
-1. **git clone** this project locally.
-2. Use the Databricks CLI to validate and test changes against a workspace: `databricks bundle validate -t dev`
-3. Contribute via pull requests (PRs), with a review from a teammate when possible.
+1. Clone this project locally.
+2. Validate changes: `databricks bundle validate -t dev`
+3. Contribute via pull requests with a review from a teammate.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution terms.
 
 ## Third-Party Package Licenses
 
-© 2025 Databricks, Inc. All rights reserved. The source in this project is provided subject to the [Databricks License](https://databricks.com/db-license-source). Third-party libraries are subject to the licenses set forth below.
+(c) 2025 Databricks, Inc. All rights reserved. The source in this project is provided subject to the [Databricks License](https://databricks.com/db-license-source). Third-party libraries are subject to the licenses set forth below.
 
-| Package      | License   | Copyright |
-| ------------ | --------- | --------- |
-| pandas       | BSD-3     | BSD       |
-| numpy        | BSD-3     | NumPy     |
-| scikit-learn | BSD-3     | scikit-learn |
-| matplotlib   | PSF       | Matplotlib |
-| seaborn      | BSD-3     | Seaborn   |
-| hdbscan      | Apache-2.0| Leland McInnes |
-| faker        | MIT       | Faker     |
-
----
-
-For detailed pipeline information, see [docs/PIPELINE_DETAILS.md](docs/PIPELINE_DETAILS.md).
+| Package      | License    | Copyright      |
+| ------------ | ---------- | -------------- |
+| pandas       | BSD-3      | BSD            |
+| numpy        | BSD-3      | NumPy          |
+| scikit-learn | BSD-3      | scikit-learn   |
+| matplotlib   | PSF        | Matplotlib     |
+| seaborn      | BSD-3      | Seaborn        |
+| hdbscan      | Apache-2.0 | Leland McInnes |
+| faker        | MIT        | Faker          |
+| fastapi      | MIT        | Tiangolo       |
+| asyncpg      | Apache-2.0 | MagicStack     |
+| recharts     | MIT        | recharts       |
+| pigeon-maps  | MIT        | pigeon-maps    |
