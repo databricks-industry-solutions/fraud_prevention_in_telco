@@ -18,46 +18,39 @@ End-to-end fraud prevention on Databricks — from data pipeline to analyst work
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Databricks Workspace                      │
-│                                                              │
-│  ┌──────────┐  ┌─────────┐  ┌─────────┐  ┌───────────┐    │
-│  │  Volumes  │─▶│ Bronze  │─▶│ Silver  │─▶│   Gold    │    │
-│  │ (NDJSON)  │  │ Tables  │  │ Tables  │  │  Tables   │    │
-│  └──────────┘  └─────────┘  └─────────┘  └─────┬─────┘    │
-│                                                  ▼          │
-│                                           ┌───────────┐     │
-│                                           │Risk Engine│     │
-│                                           └─────┬─────┘     │
-│                                                 ▼           │
-│                                        ┌──────────────┐     │
-│                                        │ Delta Tables  │     │
-│                                        │(Unity Catalog)│     │
-│                                        └──────┬───────┘     │
-│                                               │ CDF Sync    │
-│                                               ▼             │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │               Lakebase (Postgres)                     │   │
-│  │  Synced: transactions_synced, device_sdk_synced       │   │
-│  │  Writable: analyst_review, decision_audit_log         │   │
-│  └────────────────────┬─────────────────────────────────┘   │
-│                       │ asyncpg                              │
-│                       ▼                                      │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │            FastAPI Backend (Databricks App)            │   │
-│  │  /api/executive  /api/dashboard  /api/cases  /api/chat│   │
-│  └────────────────────┬─────────────────────────────────┘   │
-│                       │                                      │
-│  ┌────────┐  ┌───────▼──────┐  ┌─────────┐  ┌──────────┐  │
-│  │ Genie  │  │React Frontend│  │  FMAPI  │  │    KA    │  │
-│  │ Space  │  │  (3 views)   │  │ (Agent) │  │(Playbook)│  │
-│  └────────┘  └──────────────┘  └─────────┘  └──────────┘  │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │       Foundation Model API (Claude Sonnet 4.5)        │   │
-│  │  Tool-calling agent for fraud investigation           │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+                          Databricks Workspace
+  +============+    +==========+    +==========+    +==========+
+  |  Volumes   | -> |  Bronze  | -> |  Silver  | -> |   Gold   |
+  |  (NDJSON)  |    |  Tables  |    |  Tables  |    |  Tables  |
+  +============+    +==========+    +==========+    +=====+====+
+                                                          |
+                                                    +-----v-----+
+                                                    | Risk Engine|
+                                                    +-----+-----+
+                                                          |
+                                                   +------v-------+
+                                                   | Delta Tables  |
+                                                   |(Unity Catalog)|
+                                                   +------+-------+
+                                                          | CDF Sync
+                                                          v
+  +-----------------------------------------------------------+
+  |                    Lakebase (Postgres)                      |
+  |  Synced: transactions_synced, device_sdk_synced            |
+  |  Writable: analyst_review, decision_audit_log              |
+  +-----------------------------+------------------------------+
+                                | asyncpg
+                                v
+  +-----------------------------------------------------------+
+  |              FastAPI Backend (Databricks App)               |
+  |  /api/executive  /api/dashboard  /api/cases  /api/chat     |
+  +-----------------------------+------------------------------+
+                                |
+  +---------+  +--------+  +--------+  +------------+
+  |  Genie  |  | React  |  | FMAPI  |  | Knowledge  |
+  |  Space  |  |  SPA   |  | Agent  |  | Assistant  |
+  +---------+  +--------+  +--------+  +------------+
+  (Executive)  (3 views)   (Analyst)    (Playbook)
 ```
 
 ## Quick Start

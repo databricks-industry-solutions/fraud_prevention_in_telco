@@ -27,8 +27,21 @@ jobs:
       - name: Validate bundle syntax
         run: databricks bundle validate 2>&1 || echo "Bundle validation requires auth - syntax check passed"
 
-      - name: Check Python syntax
-        run: python3 -m py_compile apps/fraud-analyst/app.py
+      - name: Check Python syntax (all app files)
+        run: |
+          find apps/fraud-analyst -name "*.py" -not -path "*/node_modules/*" -not -path "*/__pycache__/*" \
+            -exec python3 -m py_compile {} \;
+          echo "All Python files pass syntax check"
+
+      - name: Check for hardcoded secrets
+        run: |
+          if grep -rn "gho_\|sk-[a-zA-Z0-9]\{20\}\|password.*=.*['\"][a-zA-Z0-9]" \
+            apps/fraud-analyst/server/ apps/fraud-analyst/app.py apps/fraud-analyst/app.yaml \
+            --include="*.py" --include="*.yaml" 2>/dev/null | grep -v "os.environ\|<your-\|_fetch_secret\|PGPASSWORD_SECRET\|# "; then
+            echo "::error::Potential hardcoded secrets found"
+            exit 1
+          fi
+          echo "No hardcoded secrets found"
 
       - name: Check frontend build files exist
         run: |
