@@ -24,27 +24,27 @@ End-to-end fraud prevention on Databricks — from data pipeline to analyst work
   |  (NDJSON)  |    |  Tables  |    |  Tables  |    |  Tables  |
   +============+    +==========+    +==========+    +=====+====+
                                                           |
-                                                    +-----v-----+
+                                                    +-----v------+
                                                     | Risk Engine|
-                                                    +-----+-----+
+                                                    +-----+------+
                                                           |
-                                                   +------v-------+
+                                                   +------v--------+
                                                    | Delta Tables  |
                                                    |(Unity Catalog)|
-                                                   +------+-------+
+                                                   +------+--------+
                                                           | CDF Sync
                                                           v
   +-----------------------------------------------------------+
-  |                    Lakebase (Postgres)                      |
-  |  Synced: transactions_synced, device_sdk_synced            |
-  |  Writable: analyst_review, decision_audit_log              |
-  +-----------------------------+------------------------------+
+  |                    Lakebase (Postgres)                    |
+  |  Synced: transactions_synced, device_sdk_synced           |
+  |  Writable: analyst_review, decision_audit_log             |
+  +-----------------------------+-----------------------------+
                                 | asyncpg
                                 v
   +-----------------------------------------------------------+
-  |              FastAPI Backend (Databricks App)               |
-  |  /api/executive  /api/dashboard  /api/cases  /api/chat     |
-  +-----------------------------+------------------------------+
+  |              FastAPI Backend (Databricks App)             |
+  |  /api/executive  /api/dashboard  /api/cases  /api/chat    |
+  +-----------------------------+-----------------------------+
                                 |
   +---------+  +--------+  +--------+  +------------+
   |  Genie  |  | React  |  | FMAPI  |  | Knowledge  |
