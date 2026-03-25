@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Fraud operations workbench with Executive, Management, and Analyst views" />
+    <title>Fraud Operations</title>
+    <script>
+      // Runtime config: fetch app title and labels from backend so they
+      // don't need a frontend rebuild when changing industries.
+      fetch("/api/config").then(r=>r.json()).then(c=>{
+        if(c.app_title) document.title=c.app_title;
+        window.__APP_CONFIG__=c;
+      }).catch(()=>{});
+    </script>
+    <script type="module" crossorigin src="/assets/index-suGEMw_W.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-nLCOilJd.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
