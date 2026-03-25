@@ -58,7 +58,7 @@ def _generate_analyst_names(count: int, state: str, seed_offset: int) -> List[Tu
 
 
 def build_fraud_analysts(
-    catalog: str = "telecommunications",
+    catalog: str = "cmegdemos_catalog",
     schema: str = "fraud_data",
     analysts_per_state: int = 4,
 ) -> pd.DataFrame:
@@ -88,7 +88,7 @@ def main(catalog: str, schema: str, analysts_per_state: int = 4) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate fraud analyst roster by state")
-    parser.add_argument("--catalog", default="telecommunications")
+    parser.add_argument("--catalog", default="cmegdemos_catalog")
     parser.add_argument("--schema", default="fraud_data")
     parser.add_argument("--analysts-per-state", type=int, default=4)
     args = parser.parse_args()

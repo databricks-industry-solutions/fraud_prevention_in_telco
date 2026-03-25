@@ -39,7 +39,7 @@ GOLD_DEVICE_COLUMNS = [
 
 
 class GoldDeviceSDKGenerator:
-    def __init__(self, catalog: str = "telecommunications", schema: str = "fraud_data"):
+    def __init__(self, catalog: str = "cmegdemos_catalog", schema: str = "fraud_data"):
         self.catalog = catalog
         self.schema = schema
 
@@ -143,8 +143,8 @@ def main():
     parser.add_argument(
         "--catalog",
         type=str,
-        default="telecommunications",
-        help="Unity Catalog name (default: telecommunications)",
+        default="cmegdemos_catalog",
+        help="Unity Catalog name (default: cmegdemos_catalog)",
     )
     parser.add_argument(
         "--schema",

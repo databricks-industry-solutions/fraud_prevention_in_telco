@@ -51,7 +51,7 @@ MITIGATION_ESCALATED = [
 
 
 class AnalystReview:
-    def __init__(self, catalog: str = "telecommunications", schema: str = "fraud_data"):
+    def __init__(self, catalog: str = "cmegdemos_catalog", schema: str = "fraud_data"):
         self.catalog = catalog
         self.schema = schema
         self.engine_table = self._load_engine_table()
@@ -321,7 +321,7 @@ class AnalystReview:
         print(f"Saved {len(analyst)} analyst review rows and {len(final)} final transaction risk rows.")
 
 
-def run_analyst_simulation(catalog: str = "telecommunications", schema: str = "fraud_data") -> None:
+def run_analyst_simulation(catalog: str = "cmegdemos_catalog", schema: str = "fraud_data") -> None:
     review = AnalystReview(catalog=catalog, schema=schema)
     analyst_table = review.build_analyst_review()
     final_table = review.merge_with_engine(analyst_table)

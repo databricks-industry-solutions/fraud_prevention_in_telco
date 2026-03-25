@@ -13,7 +13,7 @@ import argparse
 import pandas as pd
 from pyspark.sql import SparkSession
 
-def generate_device_id_reference(catalog: str = "telecommunications", 
+def generate_device_id_reference(catalog: str = "cmegdemos_catalog", 
                                    schema: str = "fraud_data", 
                                    num_devices: int = 10000):
     """
@@ -53,8 +53,8 @@ def generate_device_id_reference(catalog: str = "telecommunications",
 def main():
     """Main execution function."""
     parser = argparse.ArgumentParser(description="Generate device ID reference table")
-    parser.add_argument("--catalog", type=str, default="telecommunications", 
-                       help="Unity Catalog name (default: telecommunications)")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog", 
+                       help="Unity Catalog name (default: cmegdemos_catalog)")
     parser.add_argument("--schema", type=str, default="fraud_data",
                        help="Schema name (default: fraud_data)")
     parser.add_argument("--num-devices", type=int, default=10000,

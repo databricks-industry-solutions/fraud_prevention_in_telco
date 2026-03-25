@@ -70,7 +70,7 @@ def save_bronze_from_spark(bronze_spark_df, catalog: str, schema: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Ingest raw network data into bronze layer")
-    parser.add_argument("--catalog", type=str, default="telecommunications")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog")
     parser.add_argument("--schema", type=str, default="fraud_data")
     parser.add_argument("--source", type=str, default="volume")
     args = parser.parse_args()

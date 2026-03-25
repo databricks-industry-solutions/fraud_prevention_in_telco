@@ -20,7 +20,7 @@
         "    -- Quarter label (STRING)\n",
         "    cast(concat('Q', quarter(transaction_date), ' ', year(transaction_date)) as string) AS metric_quarter_label\n",
         "\n",
-        "  FROM telecommunications.fraud_data.transaction_risk\n",
+        "  FROM cmegdemos_catalog.fraud_data.transaction_risk\n",
         ")\n",
         "\n",
         "SELECT * FROM transaction_risk;"
@@ -30,9 +30,6 @@
       "name": "99313fb4",
       "displayName": "Score- Categorized",
       "queryLines": [
-        "USE CATALOG `main`;\n",
-        "USE SCHEMA `default`;\n",
-        "\n",
         "SELECT \n",
         "  *, \n",
         "  CASE \n",
@@ -43,7 +40,7 @@
         "    WHEN fraud_score >= 90 AND fraud_score < 95 THEN '90-95'\n",
         "    WHEN fraud_score >= 95 THEN '95+'\n",
         "  END AS fraud_score_category\n",
-        "FROM telecommunications.fraud_data.transaction_risk"
+        "FROM cmegdemos_catalog.fraud_data.transaction_risk"
       ]
     },
     {
@@ -58,7 +55,7 @@
         "  SUM(CASE WHEN review_status = 'escalated' THEN 1 ELSE 0 END) AS escalated_cases,\n",
         "  SUM(CASE WHEN review_status = 'pending_review' THEN 1 ELSE 0 END) AS pending_cases,\n",
         "  COUNT(*) AS total_cases\n",
-        "FROM transaction_risk\n",
+        "FROM cmegdemos_catalog.fraud_data.transaction_risk\n",
         "WHERE fraud_score >= 70 AND fraud_score < 95\n",
         "GROUP BY assigned_analyst, transaction_state, transaction_region\n",
         "ORDER BY total_cases DESC"
@@ -74,7 +71,7 @@
         "  SELECT\n",
         "    DATE(transaction_date) AS transaction_day,\n",
         "    COUNT(*) AS daily_case_count\n",
-        "  FROM telecommunications.fraud_data.transaction_risk\n",
+        "  FROM cmegdemos_catalog.fraud_data.transaction_risk\n",
         "  WHERE fraud_score BETWEEN 70 AND 95\n",
         "  GROUP BY DATE(transaction_date)\n",
         "),\n",
@@ -160,7 +157,7 @@
         "            end\n",
         "        ) as lost_by_missed_fraud_cases\n",
         "\n",
-        "    from telecommunications.fraud_data.transaction_risk\n",
+        "    from cmegdemos_catalog.fraud_data.transaction_risk\n",
         "    group by 1, 2, 3, 4\n",
         ")\n",
         "\n",
@@ -249,7 +246,7 @@
         "            end\n",
         "        ) as lost_by_missed_fraud_cases\n",
         "\n",
-        "    from telecommunications.fraud_data.transaction_risk\n",
+        "    from cmegdemos_catalog.fraud_data.transaction_risk\n",
         "    group by 1, 2, 3, 4\n",
         ")\n",
         "\n",
@@ -2844,3 +2841,1201 @@
                   "fields": [
                     {
                       "name": "transaction_state",
+                      "expression": "`transaction_state`"
+                    },
+                    {
+                      "name": "transaction_state_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a1f94c6fe201aa83e1a_analyst_state",
+                "query": {
+                  "datasetName": "656bb0ef",
+                  "fields": [
+                    {
+                      "name": "analyst_state",
+                      "expression": "`analyst_state`"
+                    },
+                    {
+                      "name": "analyst_state_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "State"
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "transaction_state",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f2519f1b6a61adca5d8bc21_transaction_state"
+                  },
+                  {
+                    "fieldName": "transaction_state",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a199acc759248f67e88_transaction_state"
+                  },
+                  {
+                    "fieldName": "analyst_state",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a1f94c6fe201aa83e1a_analyst_state"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "d32636e3",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "transaction_state",
+                      "expression": "`transaction_state`"
+                    },
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    },
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    }
+                  ],
+                  "cubeGroupingSets": {
+                    "sets": [
+                      {
+                        "fieldNames": [
+                          "transaction_state"
+                        ]
+                      },
+                      {
+                        "fieldNames": [
+                          "review_status"
+                        ]
+                      }
+                    ]
+                  },
+                  "disaggregated": false,
+                  "orders": [
+                    {
+                      "direction": "ASC",
+                      "expression": "`transaction_state`"
+                    },
+                    {
+                      "direction": "ASC",
+                      "expression": "`review_status`"
+                    }
+                  ]
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "frame": {
+                "title": "States with Highest Pending Cases",
+                "showTitle": true
+              },
+              "widgetType": "pivot",
+              "encodings": {
+                "rows": [
+                  {
+                    "fieldName": "transaction_state"
+                  }
+                ],
+                "columns": [
+                  {
+                    "fieldName": "review_status",
+                    "headerHeight": 32
+                  }
+                ],
+                "cell": {
+                  "type": "multi-cell",
+                  "fields": [
+                    {
+                      "fieldName": "count(*)",
+                      "cellType": "text",
+                      "format": {
+                        "type": "number-plain",
+                        "abbreviation": "none",
+                        "decimalPlaces": {
+                          "type": "exact",
+                          "places": 0
+                        },
+                        "hideGroupSeparator": true
+                      },
+                      "displayName": "Pending Cases",
+                      "style": {
+                        "type": "basic",
+                        "rules": [
+                          {
+                            "condition": {
+                              "operand": {
+                                "type": "data-value",
+                                "value": "50"
+                              },
+                              "operator": ">="
+                            },
+                            "foregroundColor": {
+                              "themeColorType": "visualizationColors",
+                              "position": 10
+                            }
+                          },
+                          {
+                            "condition": {
+                              "operand": {
+                                "type": "data-value",
+                                "value": "10"
+                              },
+                              "operator": "<="
+                            },
+                            "foregroundColor": {
+                              "themeColorType": "visualizationColors",
+                              "position": 2
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "width": 125
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 7,
+            "y": 16,
+            "width": 5,
+            "height": 7
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    },
+    {
+      "name": "532fda8e",
+      "displayName": "Analyst view - Assigned cases to review",
+      "layout": [
+        {
+          "widget": {
+            "name": "237ce62e",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "transaction_id",
+                      "expression": "`transaction_id`"
+                    },
+                    {
+                      "name": "transaction_date",
+                      "expression": "`transaction_date`"
+                    },
+                    {
+                      "name": "customer_name",
+                      "expression": "`customer_name`"
+                    },
+                    {
+                      "name": "transaction_type",
+                      "expression": "`transaction_type`"
+                    },
+                    {
+                      "name": "transaction_cost",
+                      "expression": "`transaction_cost`"
+                    },
+                    {
+                      "name": "fraud_score",
+                      "expression": "`fraud_score`"
+                    },
+                    {
+                      "name": "risk_reason_engine",
+                      "expression": "`risk_reason_engine`"
+                    },
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    },
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "analyst_notes",
+                      "expression": "`analyst_notes`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`review_status` IN ('pending_review')"
+                    },
+                    {
+                      "expression": "IN_RANGE(`fraud_score`, 70D, 95D)"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Recent Transactions Needing Review",
+                "showTitle": true
+              },
+              "rowsPerPage": 25,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "transaction_id",
+                    "displayName": "Transaction ID"
+                  },
+                  {
+                    "fieldName": "transaction_date",
+                    "displayName": "Transaction Date"
+                  },
+                  {
+                    "fieldName": "customer_name",
+                    "displayName": "Customer Name"
+                  },
+                  {
+                    "fieldName": "transaction_type",
+                    "displayName": "Transaction Type"
+                  },
+                  {
+                    "fieldName": "transaction_cost",
+                    "displayName": "Transaction Cost"
+                  },
+                  {
+                    "fieldName": "fraud_score",
+                    "displayName": "Fraud Score",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "90"
+                            },
+                            "operator": ">="
+                          },
+                          "foregroundColor": "#C62828"
+                        },
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "90"
+                            },
+                            "operator": "<="
+                          },
+                          "foregroundColor": {
+                            "themeColorType": "visualizationColors",
+                            "position": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "fieldName": "risk_reason_engine",
+                    "displayName": "Risk Reason"
+                  },
+                  {
+                    "fieldName": "review_status",
+                    "displayName": "Review Status"
+                  },
+                  {
+                    "fieldName": "assigned_analyst",
+                    "displayName": "Assigned Analyst"
+                  },
+                  {
+                    "fieldName": "analyst_notes"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 15,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "filter-by-analysts",
+            "queries": [
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a1f94c6fe201aa83e1a_assigned_analyst",
+                "query": {
+                  "datasetName": "656bb0ef",
+                  "fields": [
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "assigned_analyst_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f2519f1b6a61adca5d8bc21_assigned_analyst",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "assigned_analyst_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a199acc759248f67e88_assigned_analyst",
+                "query": {
+                  "datasetName": "99313fb4",
+                  "fields": [
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "assigned_analyst_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Analyst name"
+              },
+              "selection": {
+                "defaultSelection": {
+                  "values": {
+                    "dataType": "STRING",
+                    "values": [
+                      {
+                        "value": "Adriana Davis"
+                      }
+                    ]
+                  }
+                }
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "assigned_analyst",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a1f94c6fe201aa83e1a_assigned_analyst"
+                  },
+                  {
+                    "fieldName": "assigned_analyst",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f2519f1b6a61adca5d8bc21_assigned_analyst"
+                  },
+                  {
+                    "fieldName": "assigned_analyst",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a199acc759248f67e88_assigned_analyst"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 4,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "229583e9",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# <span style=\"font-size:18px\">**1) Auto-blocked cases&#32;**</span><span style=\"font-size:18px\"> </span><span style=\"font-size:14px\">*(sampled for analyst review to maintain engine health)*</span>\n",
+                "\n",
+                "<span style=\"font-size:14px\">*Action for analysts: review and validate&#32;* </span>if autoblock was a correct action or not"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 5,
+            "width": 6,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "3e124bc4",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# <span style=\"font-size:18px\">**2) Medium Confidence Cases&#32;**</span><span style=\"font-size:18px\"> </span><span style=\"font-size:14px\">*(Cases with confidence of 70%-95% that requires analyst review)*</span>\n",
+                "\n",
+                "<span style=\"font-size:14px\">*Action for analysts: review and 1) block 2) pass 3) escalate*</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 13,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "a001a547",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "transaction_id",
+                      "expression": "`transaction_id`"
+                    },
+                    {
+                      "name": "is_fp",
+                      "expression": "`is_fp`"
+                    },
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "analyst_notes",
+                      "expression": "`analyst_notes`"
+                    },
+                    {
+                      "name": "risk_reason_engine",
+                      "expression": "`risk_reason_engine`"
+                    },
+                    {
+                      "name": "fraud_score",
+                      "expression": "`fraud_score`"
+                    },
+                    {
+                      "name": "transaction_date",
+                      "expression": "`transaction_date`"
+                    },
+                    {
+                      "name": "customer_name",
+                      "expression": "`customer_name`"
+                    },
+                    {
+                      "name": "transaction_type",
+                      "expression": "`transaction_type`"
+                    },
+                    {
+                      "name": "transaction_cost",
+                      "expression": "`transaction_cost`"
+                    },
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "title": "Auto Blocked Cases Assigned to Analysts",
+                "showTitle": true
+              },
+              "rowsPerPage": 25,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "transaction_id",
+                    "displayName": "Transaction ID"
+                  },
+                  {
+                    "fieldName": "is_fp",
+                    "headerTooltip": "Engine has automaically blocked this transaction, check and verify if it ws a legitimet transaction or not?",
+                    "useForSearch": false,
+                    "contentAlignment": "center",
+                    "displayName": "Was it a False Positive? ",
+                    "style": {
+                      "type": "basic",
+                      "backgroundColor": {
+                        "themeColorType": "widgetBackgroundColor"
+                      },
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "false"
+                            },
+                            "operator": "="
+                          },
+                          "backgroundColor": {
+                            "themeColorType": "visualizationColors",
+                            "position": 3
+                          }
+                        },
+                        {
+                          "condition": {
+                            "operator": "is null"
+                          },
+                          "backgroundColor": {
+                            "themeColorType": "widgetBackgroundColor"
+                          },
+                          "foregroundColor": {
+                            "themeColorType": "widgetBackgroundColor"
+                          }
+                        },
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "true"
+                            },
+                            "operator": "="
+                          },
+                          "backgroundColor": {
+                            "themeColorType": "visualizationColors",
+                            "position": 10
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "fieldName": "assigned_analyst",
+                    "displayName": "Assigned Analyst"
+                  },
+                  {
+                    "fieldName": "analyst_notes",
+                    "displayName": "Analyst Notes"
+                  },
+                  {
+                    "fieldName": "risk_reason_engine",
+                    "displayName": "Engine Reason to Block"
+                  },
+                  {
+                    "fieldName": "fraud_score",
+                    "displayName": "Fraud Score"
+                  },
+                  {
+                    "fieldName": "transaction_date",
+                    "displayName": "Transaction Date"
+                  },
+                  {
+                    "fieldName": "customer_name",
+                    "displayName": "Customer Name"
+                  },
+                  {
+                    "fieldName": "transaction_type",
+                    "displayName": "Transaction Type"
+                  },
+                  {
+                    "fieldName": "transaction_cost",
+                    "displayName": "Transaction Cost"
+                  },
+                  {
+                    "fieldName": "review_status"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 7,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "950bbbe7",
+            "queries": [
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f2519f1b6a61adca5d8bc21_review_status",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    },
+                    {
+                      "name": "review_status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a199acc759248f67e88_review_status",
+                "query": {
+                  "datasetName": "99313fb4",
+                  "fields": [
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    },
+                    {
+                      "name": "review_status_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "Status"
+              },
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "review_status",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f2519f1b6a61adca5d8bc21_review_status"
+                  },
+                  {
+                    "fieldName": "review_status",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a199acc759248f67e88_review_status"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 9,
+            "y": 0,
+            "width": 3,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "087b6b47",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# <span style=\"text-align:center;display:block\"><span style=\"font-size:18px\">3 -1 ) Lost Cases - FP</span></span>\n",
+                "\n",
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:14px\">*False Positive Cases - cases blocked that should not have been blocked&#32;*</span></span>\n",
+                "\n",
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:14px\">*Action: review and suggest improvement to auto block engine (enhance/remove rule)*</span></span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 21,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "review-lost-cases-group-1",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "transaction_id",
+                      "expression": "`transaction_id`"
+                    },
+                    {
+                      "name": "transaction_date",
+                      "expression": "`transaction_date`"
+                    },
+                    {
+                      "name": "customer_name",
+                      "expression": "`customer_name`"
+                    },
+                    {
+                      "name": "transaction_type",
+                      "expression": "`transaction_type`"
+                    },
+                    {
+                      "name": "transaction_cost",
+                      "expression": "`transaction_cost`"
+                    },
+                    {
+                      "name": "fraud_score",
+                      "expression": "`fraud_score`"
+                    },
+                    {
+                      "name": "risk_reason_engine",
+                      "expression": "`risk_reason_engine`"
+                    },
+                    {
+                      "name": "case_exposure_usd",
+                      "expression": "`case_exposure_usd`"
+                    },
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    },
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "analyst_notes",
+                      "expression": "`analyst_notes`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`is_fp` IN (TRUE)"
+                    },
+                    {
+                      "expression": "IN_RANGE(`fraud_score`, 95D, NULL)"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "rowsPerPage": 25,
+              "frame": {
+                "title": "Group 3-1: False Positive Cases - cases blocked that should not have been blocked",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "transaction_id",
+                    "displayName": "Transaction ID"
+                  },
+                  {
+                    "fieldName": "transaction_date",
+                    "displayName": "Transaction Date"
+                  },
+                  {
+                    "fieldName": "customer_name",
+                    "displayName": "Customer Name"
+                  },
+                  {
+                    "fieldName": "transaction_type",
+                    "displayName": "Transaction Type"
+                  },
+                  {
+                    "fieldName": "transaction_cost",
+                    "displayName": "Transaction Cost"
+                  },
+                  {
+                    "fieldName": "fraud_score",
+                    "displayName": "Fraud Score"
+                  },
+                  {
+                    "fieldName": "risk_reason_engine",
+                    "displayName": "Risk Reason"
+                  },
+                  {
+                    "fieldName": "case_exposure_usd",
+                    "displayName": "Case Exposure USD"
+                  },
+                  {
+                    "fieldName": "review_status",
+                    "displayName": "Review Status"
+                  },
+                  {
+                    "fieldName": "assigned_analyst",
+                    "displayName": "Assigned Analyst"
+                  },
+                  {
+                    "fieldName": "analyst_notes"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 24,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "c4cd6a38",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# <span style=\"text-align:center;display:block\"><span style=\"font-size:18px\">3-2) Lost Cases - FN</span></span>\n",
+                "\n",
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:14px\">*False Negative Cases - cases engine missed that should have been blocked&#32;*</span></span>\n",
+                "\n",
+                "<span style=\"text-align:center;display:block\"><span style=\"font-size:14px\">*Action: review and suggest improvement to auto block engine (add rule)*</span></span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 21,
+            "width": 6,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "15680de8",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "transaction_id",
+                      "expression": "`transaction_id`"
+                    },
+                    {
+                      "name": "transaction_date",
+                      "expression": "`transaction_date`"
+                    },
+                    {
+                      "name": "customer_name",
+                      "expression": "`customer_name`"
+                    },
+                    {
+                      "name": "transaction_type",
+                      "expression": "`transaction_type`"
+                    },
+                    {
+                      "name": "transaction_cost",
+                      "expression": "`transaction_cost`"
+                    },
+                    {
+                      "name": "fraud_score",
+                      "expression": "`fraud_score`"
+                    },
+                    {
+                      "name": "risk_reason_engine",
+                      "expression": "`risk_reason_engine`"
+                    },
+                    {
+                      "name": "case_exposure_usd",
+                      "expression": "`case_exposure_usd`"
+                    },
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    },
+                    {
+                      "name": "assigned_analyst",
+                      "expression": "`assigned_analyst`"
+                    },
+                    {
+                      "name": "analyst_notes",
+                      "expression": "`analyst_notes`"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "expression": "`is_fn` IN (TRUE)"
+                    },
+                    {
+                      "expression": "IN_RANGE(`fraud_score`, 0D, 70D)"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "rowsPerPage": 25,
+              "frame": {
+                "title": "Group 3-2 FN: False Negative Cases - cases engine missed that should have been blocked ",
+                "showTitle": true
+              },
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "transaction_id",
+                    "displayName": "Transaction ID"
+                  },
+                  {
+                    "fieldName": "transaction_date",
+                    "displayName": "Transaction Date"
+                  },
+                  {
+                    "fieldName": "customer_name",
+                    "displayName": "Customer Name"
+                  },
+                  {
+                    "fieldName": "transaction_type",
+                    "displayName": "Transaction Type"
+                  },
+                  {
+                    "fieldName": "transaction_cost",
+                    "displayName": "Transaction Cost"
+                  },
+                  {
+                    "fieldName": "fraud_score",
+                    "displayName": "Fraud Score",
+                    "style": {
+                      "type": "basic",
+                      "rules": [
+                        {
+                          "condition": {
+                            "operand": {
+                              "type": "data-value",
+                              "value": "70"
+                            },
+                            "operator": "<="
+                          },
+                          "backgroundColor": "#FFF3E0",
+                          "foregroundColor": "#E65100"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "fieldName": "risk_reason_engine",
+                    "displayName": "Risk Reason"
+                  },
+                  {
+                    "fieldName": "case_exposure_usd",
+                    "displayName": "Case Exposure USD"
+                  },
+                  {
+                    "fieldName": "review_status",
+                    "displayName": "Review Status"
+                  },
+                  {
+                    "fieldName": "assigned_analyst",
+                    "displayName": "Assigned Analyst"
+                  },
+                  {
+                    "fieldName": "analyst_notes",
+                    "displayName": "Analyst Notes"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 30,
+            "width": 12,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "358c03c6",
+            "queries": [
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f2519f1b6a61adca5d8bc21_transaction_date",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "transaction_date",
+                      "expression": "`transaction_date`"
+                    },
+                    {
+                      "name": "transaction_date_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              },
+              {
+                "name": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a199acc759248f67e88_transaction_date",
+                "query": {
+                  "datasetName": "99313fb4",
+                  "fields": [
+                    {
+                      "name": "transaction_date",
+                      "expression": "`transaction_date`"
+                    },
+                    {
+                      "name": "transaction_date_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "frame": {
+                "showTitle": true,
+                "title": "DATE"
+              },
+              "selection": {
+                "defaultSelection": {
+                  "operator": {
+                    "operator": "AND",
+                    "args": []
+                  }
+                }
+              },
+              "widgetType": "filter-date-range-picker",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "transaction_date",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f2519f1b6a61adca5d8bc21_transaction_date"
+                  },
+                  {
+                    "fieldName": "transaction_date",
+                    "queryName": "dashboards/01f10f58d2e01cab87298ec22e54c87e/datasets/01f114707f251a199acc759248f67e88_transaction_date"
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 5,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "f9c4559d",
+            "multilineTextboxSpec": {
+              "lines": [
+                "<span style=\"font-size:18px\">In this view, analysts can filter the cases assigned to them and begin reviewing them. To support their work, analysts can utilize a </span>[knowledge assistant agent ](https://e2-demo-west.cloud.databricks.com/ml/bricks/ka/configure/925fa56f-c457-4ad5-a5ae-a885f5eb1860?o=2556758628403379)<span style=\"font-size:19px\">trained on the </span>[fraud operations guideline](https://fevm-cmegdemos.cloud.databricks.com/ml/bricks/ka/configure/caf94e04-2a0d-424c-9c5e-cacff6e60e57?o=7474656585748611)<span style=\"font-size:18px\">. </span><span style=\"font-size:18px\">Cases are within three categories:</span>\n",
+                "\n",
+                "<span style=\"font-size:18px\">1) Auto-blocked cases always require analyst review to maintain engine health.</span><br><span style=\"font-size:18px\">2) Cases with medium confidence necessitate analyst review for action to be taken.</span><br><span style=\"font-size:18px\">3) Lost cases include both false positive and false negative scenarios.</span>"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 6,
+            "height": 4
+          }
+        },
+        {
+          "widget": {
+            "name": "bbbc33d5",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "e3a8d490",
+                  "fields": [
+                    {
+                      "name": "review_status",
+                      "expression": "`review_status`"
+                    },
+                    {
+                      "name": "count(*)",
+                      "expression": "COUNT(`*`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "review_status",
+                  "scale": {
+                    "type": "categorical"
+                  }
+                },
+                "y": {
+                  "fieldName": "count(*)",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                },
+                "label": {
+                  "show": true
+                }
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 1,
+            "width": 6,
+            "height": 6
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    },
+    "genieSpace": {
+      "isEnabled": false,
+      "enablementMode": "ENABLEMENT_MODE_UNSPECIFIED"
+    },
+    "applyModeEnabled": false
+  }
+}

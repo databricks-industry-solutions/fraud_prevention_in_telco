@@ -16,7 +16,7 @@ Generates synthetic fraud detection data across three pipelines:
 
 The **risk engine** scores transactions using all three gold tables (transactions, device SDK, network), with rules for impossible travel, cell–IP mismatch, rapid cell hop, roaming anomalies, device signals (VPN, encryption, emulator), and transaction risk features. Output feeds analyst assignment and dashboards.
 
-**Configuration**: Uses `telecommunications` catalog and `fraud_data` schema by default. Both can be changed via job parameters.
+**Configuration**: Uses `cmegdemos_catalog` catalog and `fraud_data` schema by default. Both can be changed via job parameters.
 
 ## Installation Guidelines
 
@@ -85,7 +85,7 @@ databricks bundle run fraud_data_pipeline -t prod
 
 ### Catalog and Schema
 
-The pipeline uses **`telecommunications`** as the catalog and **`fraud_data`** as the schema by default. You can override these by editing `databricks.yml`:
+The pipeline uses **`cmegdemos_catalog`** as the catalog and **`fraud_data`** as the schema by default. You can override these by editing `databricks.yml`:
 
 ```yaml
 variables:

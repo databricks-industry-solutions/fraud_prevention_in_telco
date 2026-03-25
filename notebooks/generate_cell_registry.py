@@ -91,7 +91,7 @@ STATE_REGION_CITY = {
 
 
 def generate_cell_registry(
-    catalog: str = "telecommunications",
+    catalog: str = "cmegdemos_catalog",
     schema: str = "fraud_data",
     num_cells: int = 5000,
     seed: int = 42,
@@ -156,7 +156,7 @@ def generate_cell_registry(
 
 def main():
     parser = argparse.ArgumentParser(description="Generate cell/base station registry")
-    parser.add_argument("--catalog", type=str, default="telecommunications")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog")
     parser.add_argument("--schema", type=str, default="fraud_data")
     parser.add_argument("--num-cells", type=int, default=5000)
     parser.add_argument("--seed", type=int, default=42)

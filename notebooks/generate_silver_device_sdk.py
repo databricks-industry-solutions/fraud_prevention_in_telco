@@ -11,7 +11,7 @@ from pyspark.sql import SparkSession
 spark = SparkSession.getActiveSession()
 
 class SilverDeviceSDKGenerator:
-    def __init__(self, catalog: str = "telecommunications", schema: str = "fraud_data"):
+    def __init__(self, catalog: str = "cmegdemos_catalog", schema: str = "fraud_data"):
         self.catalog = catalog
         self.schema = schema
     
@@ -72,8 +72,8 @@ class SilverDeviceSDKGenerator:
 def main():
     """Generate silver layer data for device SDK"""
     parser = argparse.ArgumentParser(description="Generate silver layer for device SDK")
-    parser.add_argument("--catalog", type=str, default="telecommunications",
-                       help="Unity Catalog name (default: telecommunications)")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog",
+                       help="Unity Catalog name (default: cmegdemos_catalog)")
     parser.add_argument("--schema", type=str, default="fraud_data",
                        help="Schema name (default: fraud_data)")
     

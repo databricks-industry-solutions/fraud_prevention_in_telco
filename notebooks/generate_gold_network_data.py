@@ -94,7 +94,7 @@ def save_gold(gold_df: pd.DataFrame, catalog: str, schema: str) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Generate gold network data")
-    parser.add_argument("--catalog", type=str, default="telecommunications")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog")
     parser.add_argument("--schema", type=str, default="fraud_data")
     args = parser.parse_args()
 

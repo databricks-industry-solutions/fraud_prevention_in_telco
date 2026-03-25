@@ -8,13 +8,13 @@ variables:
     default: "telecom-fraud-data-pipeline"
   warehouse_id:
     lookup:
-      warehouse: "Shared Endpoint"
+      warehouse: "Serverless Starter Warehouse"
   environment:
     description: "Deployment environment (dev, staging, prod)"
     default: "dev"
   catalog:
     description: "Unity Catalog name"
-    default: "telecommunications"
+    default: "cmegdemos_catalog"
   schema:
     description: "Schema name for fraud detection tables"
     default: "fraud_data"
@@ -24,17 +24,17 @@ targets:
     default: true
     mode: development
     workspace:
-      profile: e2-demo-west
+      profile: fevm-cmegdemos
     variables:
-      catalog: "telecommunications"
+      catalog: "cmegdemos_catalog"
       schema: "fraud_data"
 
   prod:
     mode: production
     workspace:
-      profile: e2-demo-west
+      profile: fevm-cmegdemos
     variables:
-      catalog: "telecommunications"
+      catalog: "cmegdemos_catalog"
       schema: "fraud_data"
 
 resources:

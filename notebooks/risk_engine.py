@@ -29,7 +29,7 @@ def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 
 
 class RiskEngine:
-    def __init__(self, catalog: str = "telecommunications", schema: str = "fraud_data"):
+    def __init__(self, catalog: str = "cmegdemos_catalog", schema: str = "fraud_data"):
         self.catalog = catalog
         self.schema = schema
         # Target distribution for fraud_score
@@ -578,8 +578,8 @@ class RiskEngine:
 
 def main():
     parser = argparse.ArgumentParser(description="Run risk engine on transaction data")
-    parser.add_argument("--catalog", type=str, default="telecommunications",
-                       help="Unity Catalog name (default: telecommunications)")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog",
+                       help="Unity Catalog name (default: cmegdemos_catalog)")
     parser.add_argument("--schema", type=str, default="fraud_data",
                        help="Schema name (default: fraud_data)")
     

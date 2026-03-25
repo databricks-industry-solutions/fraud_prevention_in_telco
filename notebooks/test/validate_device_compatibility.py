@@ -13,7 +13,7 @@ import argparse
 from pyspark.sql import SparkSession
 
 
-def validate_device_joins(catalog: str = "telecommunications", schema: str = "fraud_data"):
+def validate_device_joins(catalog: str = "cmegdemos_catalog", schema: str = "fraud_data"):
     """
     Validate that transaction device IDs exist in the reference table.
     
@@ -60,7 +60,7 @@ def validate_device_joins(catalog: str = "telecommunications", schema: str = "fr
         print(f"✗ Error during validation: {e}")
         return False
 
-def validate_device_sdk_table(catalog: str = "telecommunications", schema: str = "fraud_data"):
+def validate_device_sdk_table(catalog: str = "cmegdemos_catalog", schema: str = "fraud_data"):
     """
     Validate that device SDK table device IDs match the reference table.
     
@@ -100,8 +100,8 @@ def validate_device_sdk_table(catalog: str = "telecommunications", schema: str =
 def main():
     """Main execution function."""
     parser = argparse.ArgumentParser(description="Validate device ID compatibility across pipelines")
-    parser.add_argument("--catalog", type=str, default="telecommunications",
-                       help="Unity Catalog name (default: telecommunications)")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog",
+                       help="Unity Catalog name (default: cmegdemos_catalog)")
     parser.add_argument("--schema", type=str, default="fraud_data",
                        help="Schema name (default: fraud_data)")
     args = parser.parse_args()

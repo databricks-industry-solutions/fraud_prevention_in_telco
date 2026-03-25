@@ -31,8 +31,8 @@ def main():
     parser.add_argument(
         "--catalog",
         type=str,
-        default="telecommunications",
-        help="Unity Catalog name (default: telecommunications)",
+        default="cmegdemos_catalog",
+        help="Unity Catalog name (default: cmegdemos_catalog)",
     )
     parser.add_argument(
         "--schema",

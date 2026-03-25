@@ -114,7 +114,7 @@ def generate_raw_network_events(
 
 def main():
     parser = argparse.ArgumentParser(description="Generate raw network CDR-like data to Volume")
-    parser.add_argument("--catalog", type=str, default="telecommunications")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog")
     parser.add_argument("--schema", type=str, default="fraud_data")
     parser.add_argument("--volume-name", type=str, default="raw_network_data")
     parser.add_argument("--num-events", type=int, default=150_000)

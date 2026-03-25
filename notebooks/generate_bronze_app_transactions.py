@@ -37,7 +37,7 @@ spark = SparkSession.getActiveSession()
 class BronzeAppTransactionsGenerator:
     def __init__(
         self,
-        catalog: str = "telecommunications",
+        catalog: str = "cmegdemos_catalog",
         schema: str = "fraud_data",
         num_transactions: int = 100000,
         fraud_rate: float = 0.05,
@@ -826,8 +826,8 @@ class BronzeAppTransactionsGenerator:
 def main():
     """Generate bronze layer data for app transactions"""
     parser = argparse.ArgumentParser(description="Generate bronze layer for app transactions")
-    parser.add_argument("--catalog", type=str, default="telecommunications",
-                       help="Unity Catalog name (default: telecommunications)")
+    parser.add_argument("--catalog", type=str, default="cmegdemos_catalog",
+                       help="Unity Catalog name (default: cmegdemos_catalog)")
     parser.add_argument("--schema", type=str, default="fraud_data",
                        help="Schema name (default: fraud_data)")
     parser.add_argument("--source", type=str, default="generate",

@@ -597,49 +597,49 @@ From the repo root (blueprint layout: scripts under `notebooks/`):
 
 ```bash
 # Generate device IDs
-python notebooks/generate_device_id_reference.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_device_id_reference.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Generate cell registry (for network pipeline)
-python notebooks/generate_cell_registry.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_cell_registry.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Generate raw device data (writes to Volume)
-python notebooks/generate_raw_device_sdk.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_raw_device_sdk.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Generate bronze device data (reads from Volume)
-python notebooks/generate_bronze_device_sdk.py --catalog telecommunications --schema fraud_data --source volume
+python notebooks/generate_bronze_device_sdk.py --catalog cmegdemos_catalog --schema fraud_data --source volume
 
 # Generate raw transaction data (writes to Volume)
-python notebooks/generate_raw_app_transactions.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_raw_app_transactions.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Generate bronze transactions (reads from Volume)
-python notebooks/generate_bronze_app_transactions.py --catalog telecommunications --schema fraud_data --source volume
+python notebooks/generate_bronze_app_transactions.py --catalog cmegdemos_catalog --schema fraud_data --source volume
 
 # Create silver device layer
-python notebooks/generate_silver_device_sdk.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_silver_device_sdk.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Create silver transaction layer
-python notebooks/generate_silver_app_transactions.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_silver_app_transactions.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Create gold transaction layer
-python notebooks/generate_gold_app_transactions.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_gold_app_transactions.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Create gold device layer (one row per device)
-python notebooks/generate_gold_device_sdk.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_gold_device_sdk.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Network pipeline: raw → bronze → silver → gold
-python notebooks/generate_raw_network_data.py --catalog telecommunications --schema fraud_data
-python notebooks/generate_bronze_network_data.py --catalog telecommunications --schema fraud_data --source volume
-python notebooks/generate_silver_network_data.py --catalog telecommunications --schema fraud_data
-python notebooks/generate_gold_network_data.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_raw_network_data.py --catalog cmegdemos_catalog --schema fraud_data
+python notebooks/generate_bronze_network_data.py --catalog cmegdemos_catalog --schema fraud_data --source volume
+python notebooks/generate_silver_network_data.py --catalog cmegdemos_catalog --schema fraud_data
+python notebooks/generate_gold_network_data.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Run risk engine (uses gold_app_transactions, gold_device_sdk, gold_network_data)
-python notebooks/risk_engine.py --catalog telecommunications --schema fraud_data
+python notebooks/risk_engine.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Generate fraud analyst roster (same # per state; run before analyst_assignment)
-python notebooks/generate_fraud_analysts.py --catalog telecommunications --schema fraud_data
+python notebooks/generate_fraud_analysts.py --catalog cmegdemos_catalog --schema fraud_data
 
 # Run analyst simulation (assigns analysts by state, then simulates review)
-python notebooks/run_analyst_simulation.py --catalog telecommunications --schema fraud_data
+python notebooks/run_analyst_simulation.py --catalog cmegdemos_catalog --schema fraud_data
 ```
 
 ### Running via Databricks Asset Bundle
@@ -655,7 +655,7 @@ databricks jobs run-now <job_id> --job-params '{"catalog": "test_catalog", "sche
 
 ## Tables Generated
 
-All tables are created in `telecommunications.fraud_data`:
+All tables are created in `cmegdemos_catalog.fraud_data`:
 
 | Table | Records | Description |
 |-------|---------|-------------|
@@ -702,13 +702,13 @@ Or view in Databricks UI for detailed task-specific logs.
 ```sql
 -- View high-risk transactions
 SELECT transaction_id, fraud_score, risk_reason_engine, case_status
-FROM telecommunications.fraud_data.transaction_risk_engine
+FROM cmegdemos_catalog.fraud_data.transaction_risk_engine
 WHERE fraud_score >= 70
 ORDER BY fraud_score DESC;
 
 -- Analyst review outcomes
 SELECT review_status, COUNT(*) as count
-FROM telecommunications.fraud_data.analyst_review
+FROM cmegdemos_catalog.fraud_data.analyst_review
 GROUP BY review_status;
 
 -- Device risk distribution
@@ -719,7 +719,7 @@ SELECT
     ELSE 'Low Trust'
   END as trust_level,
   COUNT(*) as device_count
-FROM telecommunications.fraud_data.silver_device_sdk
+FROM cmegdemos_catalog.fraud_data.silver_device_sdk
 GROUP BY trust_level;
 ```
 
