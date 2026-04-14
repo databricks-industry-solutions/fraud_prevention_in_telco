@@ -1,10 +1,9 @@
 import { Routes, Route, NavLink } from 'react-router-dom'
-import { Shield, Briefcase, Gauge, UserSearch, Zap } from 'lucide-react'
+import { Shield, Briefcase, Gauge, UserSearch } from 'lucide-react'
 import CaseQueue from './pages/CaseQueue'
 import CaseDetail from './pages/CaseDetail'
 import Dashboard from './pages/Dashboard'
 import Analytics from './pages/Analytics'
-import FraudEngineLive from './pages/FraudEngineLive'
 
 function App() {
   return (
@@ -20,19 +19,6 @@ function App() {
               </span>
             </div>
             <div className="flex gap-1">
-              <NavLink
-                to="/engine"
-                className={({ isActive }) =>
-                  `flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition ${
-                    isActive
-                      ? 'bg-gray-700/60 text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                  }`
-                }
-              >
-                <Zap className="w-3.5 h-3.5" />
-                Fraud Engine
-              </NavLink>
               <NavLink
                 to="/"
                 end
@@ -82,7 +68,6 @@ function App() {
       <main className="px-4 sm:px-6 lg:px-8 py-6">
         <Routes>
           <Route path="/" element={<Analytics />} />
-          <Route path="/engine" element={<FraudEngineLive />} />
           <Route path="/management" element={<Dashboard />} />
           <Route path="/analyst" element={<CaseQueue />} />
           <Route path="/cases/:id" element={<CaseDetail />} />
