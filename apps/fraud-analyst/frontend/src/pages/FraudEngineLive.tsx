@@ -61,6 +61,7 @@ const CASES: FraudCase[] = [
       { id: 'R13', name: 'Roaming Anomaly', description: 'Multiple countries in short timeframe', result: 'fail', detail: '2 countries visited within 45 minutes while roaming' },
     ],
     device: { label: 'Untrusted', score: 18, detail: 'New device · No encryption · SELinux disabled' },
+    agentSummary: 'High-confidence fraud detected. All four CDR rules triggered simultaneously — impossible travel from Lagos to London (6,800 km/h implied speed), cell tower country (NG) mismatches IP geolocation (GB), rapid cell tower hopping across 120 km in 2 minutes, and multi-country roaming within a 45-minute window. Device is previously unseen with no encryption and SELinux disabled. This pattern is consistent with a SIM cloning attack where the cloned SIM is activated on a compromised device abroad. Transaction auto-blocked. Customer notification sent via SMS to registered backup number.',
     recommendation: { title: 'Enforce Multi-Factor SIM Verification', body: 'CDR analysis flagged impossible travel on this SIM swap request. Implementing mandatory biometric verification for all SIM change requests could prevent 89% of similar fraud attempts.' },
   },
   {
@@ -103,12 +104,13 @@ const CASES: FraudCase[] = [
       { id: 'R13', name: 'Roaming Anomaly', description: 'Multiple countries in short timeframe', result: 'pass', detail: 'Single country (US) · No roaming · Known carrier' },
     ],
     device: { label: 'Trusted', score: 94, detail: 'Known device · Encrypted · SELinux enforcing · MFA active' },
+    agentSummary: 'No fraud indicators found. All CDR rules passed cleanly — subscriber remained within 5 km of registered home address in Chicago, cell tower and IP geolocation both confirm United States, single stable tower connection for 3+ hours with no hopping, and no roaming activity detected. Device is a known handset with full encryption, SELinux enforcing, and active MFA. Transaction amount of $1,200 is within normal range for device upgrades on this account. Historical pattern shows this customer upgrades every 18 months — last upgrade was 19 months ago. Transaction approved with zero friction.',
     recommendation: { title: 'Automate CDR Pattern Learning', body: 'The engine\'s cell-tower analysis correctly identified normal commute patterns. Extending this to learn per-subscriber movement baselines would further reduce the manual review queue by an estimated 23%.' },
   },
 ]
 
-// Steps per case. Case 2 (review) has extra agent steps.
-const TOTAL_STEPS = { blocked: 11, review: 15, passed: 11 }
+// Steps per case. All cases have agent summary steps.
+const TOTAL_STEPS = { blocked: 15, review: 15, passed: 15 }
 const STEP_MS = 650
 
 /* ═══════════════════════════════════════════════════════════════
@@ -220,12 +222,12 @@ function DecisionPopup({ outcome, visible }: { outcome: 'blocked' | 'review' | '
   )
 }
 
-function AgentSection({ summary, analyst, step, agentStartStep }: {
-  summary: string; analyst: string; step: number; agentStartStep: number
+function AgentSection({ summary, analyst, outcome, step, agentStartStep }: {
+  summary: string; analyst?: string; outcome: 'blocked' | 'review' | 'passed'; step: number; agentStartStep: number
 }) {
   const headerVisible = step >= agentStartStep
   const typingActive = step >= agentStartStep + 1
-  const assignVisible = step >= agentStartStep + 3
+  const actionVisible = step >= agentStartStep + 3
 
   const [typedChars, setTypedChars] = useState(0)
   useEffect(() => {
@@ -250,11 +252,27 @@ function AgentSection({ summary, analyst, step, agentStartStep }: {
           {typedChars < summary.length && <span className="inline-block w-1.5 h-3 bg-purple-400 ml-0.5 animate-pulse" />}
         </p>
       )}
-      <div style={fade(assignVisible)} className="mt-3 flex items-center gap-2 bg-purple-500/10 rounded px-3 py-2">
-        <User className="w-3.5 h-3.5 text-purple-300" />
-        <span className="text-xs text-purple-200">Assigned to <strong>{analyst}</strong></span>
-        <ArrowRight className="w-3 h-3 text-purple-400 ml-auto" />
-        <span className="text-[10px] text-purple-400">Case Queue</span>
+      <div style={fade(actionVisible)} className={`mt-3 flex items-center gap-2 rounded px-3 py-2 ${
+        outcome === 'blocked' ? 'bg-red-500/10' : outcome === 'passed' ? 'bg-emerald-500/10' : 'bg-purple-500/10'
+      }`}>
+        {outcome === 'blocked' && (<>
+          <ShieldX className="w-3.5 h-3.5 text-red-300" />
+          <span className="text-xs text-red-200">Transaction blocked · Customer notified via SMS</span>
+          <ArrowRight className="w-3 h-3 text-red-400 ml-auto" />
+          <span className="text-[10px] text-red-400">Alert Log</span>
+        </>)}
+        {outcome === 'review' && (<>
+          <User className="w-3.5 h-3.5 text-purple-300" />
+          <span className="text-xs text-purple-200">Assigned to <strong>{analyst}</strong></span>
+          <ArrowRight className="w-3 h-3 text-purple-400 ml-auto" />
+          <span className="text-[10px] text-purple-400">Case Queue</span>
+        </>)}
+        {outcome === 'passed' && (<>
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+          <span className="text-xs text-emerald-200">Transaction approved · Zero friction</span>
+          <ArrowRight className="w-3 h-3 text-emerald-400 ml-auto" />
+          <span className="text-[10px] text-emerald-400">Completed</span>
+        </>)}
       </div>
     </div>
   )
@@ -404,11 +422,12 @@ function CaseSimulation({ fraudCase, playing, stagger }: {
         {/* Fraud score */}
         <ScoreBar score={fraudCase.score} visible={showScore} />
 
-        {/* Agent section (case 2 only) */}
-        {fraudCase.agentSummary && fraudCase.assignedAnalyst && step >= agentStartStep && (
+        {/* Agent section (all cases) */}
+        {fraudCase.agentSummary && step >= agentStartStep && (
           <AgentSection
             summary={fraudCase.agentSummary}
             analyst={fraudCase.assignedAnalyst}
+            outcome={fraudCase.outcome}
             step={step}
             agentStartStep={agentStartStep}
           />
