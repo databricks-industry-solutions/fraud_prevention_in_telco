@@ -264,8 +264,15 @@ function AgentSection({ summary, analyst, outcome, step, agentStartStep }: {
         {outcome === 'review' && (<>
           <User className="w-3.5 h-3.5 text-purple-300" />
           <span className="text-xs text-purple-200">Assigned to <strong>{analyst}</strong></span>
-          <ArrowRight className="w-3 h-3 text-purple-400 ml-auto" />
-          <span className="text-[10px] text-purple-400">Case Queue</span>
+          <a
+            href="https://fraud-analyst-7474656585748611.aws.databricksapps.com/analyst"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto flex items-center gap-1 px-2.5 py-1 rounded bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 hover:text-white transition cursor-pointer"
+          >
+            <ArrowRight className="w-3 h-3" />
+            <span className="text-[10px] font-semibold">Case Queue</span>
+          </a>
         </>)}
         {outcome === 'passed' && (<>
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
