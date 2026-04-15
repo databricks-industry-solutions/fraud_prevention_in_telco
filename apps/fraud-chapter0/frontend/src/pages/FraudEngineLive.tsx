@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react'
+import { useState, useEffect, useCallback, type CSSProperties } from 'react'
 import {
   Shield, AlertTriangle, CheckCircle, XCircle, Clock, Bot, User,
   Play, RotateCcw, Zap, MapPin, Cpu, Smartphone,
   ShieldCheck, ShieldX, ShieldAlert, ArrowRight, Loader2, Lightbulb,
-  Network, Signal, Phone, ChevronRight,
+  Network, Signal, Phone,
 } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════════
@@ -310,18 +310,15 @@ function RecommendationCard({ rec, visible, delay }: {
    Case Simulation Card — now reports completion
    ═══════════════════════════════════════════════════════════════ */
 
-function CaseSimulation({ fraudCase, playing, onComplete, dimmed }: {
-  fraudCase: FraudCase; playing: boolean; onComplete?: () => void; dimmed?: boolean
+function CaseSimulation({ fraudCase, playing, dimmed }: {
+  fraudCase: FraudCase; playing: boolean; dimmed?: boolean
 }) {
   const [step, setStep] = useState(-1)
   const [started, setStarted] = useState(false)
-  const [done, setDone] = useState(false)
   const maxStep = TOTAL_STEPS[fraudCase.outcome]
-  const onCompleteRef = useRef(onComplete)
-  onCompleteRef.current = onComplete
 
   useEffect(() => {
-    if (!playing) { setStarted(false); setStep(-1); setDone(false); return }
+    if (!playing) { setStarted(false); setStep(-1); return }
     setStarted(true)
     setStep(0)
   }, [playing])
@@ -332,15 +329,6 @@ function CaseSimulation({ fraudCase, playing, onComplete, dimmed }: {
     const t = setTimeout(() => setStep(s => s + 1), delay)
     return () => clearTimeout(t)
   }, [step, started, maxStep])
-
-  // Report completion via ref to avoid stale closure / timeout cancellation
-  useEffect(() => {
-    if (step >= maxStep && !done) {
-      setDone(true)
-      const t = setTimeout(() => onCompleteRef.current?.(), 800)
-      return () => clearTimeout(t)
-    }
-  }, [step, maxStep, done])
 
   const c = outcomeColor[fraudCase.outcome]
   const showTxn = step >= 0
@@ -520,43 +508,39 @@ function PipelineDiagram() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Main Page — Interactive sequential flow
+   Main Page — Interactive stepper flow
    ═══════════════════════════════════════════════════════════════ */
 
-// Phase: 0=idle, 1=case1 playing, 2=case1 done, 3=case2 playing, 4=case2 done, 5=case3 playing, 6=all done
-type DemoPhase = 0 | 1 | 2 | 3 | 4 | 5 | 6
+const scenarioLabels = [
+  { label: 'Auto-Blocked', sub: 'SIM Swap Fraud', color: 'text-red-400', bg: 'bg-red-500', ring: 'ring-red-400/50' },
+  { label: 'Sent to Review', sub: 'After-Hours Activity', color: 'text-amber-400', bg: 'bg-amber-500', ring: 'ring-amber-400/50' },
+  { label: 'Approved', sub: 'Device Upgrade', color: 'text-emerald-400', bg: 'bg-emerald-500', ring: 'ring-emerald-400/50' },
+]
 
-const phaseLabels: Record<DemoPhase, string> = {
-  0: '',
-  1: 'Scenario 1 of 3 — Evaluating...',
-  2: 'Scenario 1 complete',
-  3: 'Scenario 2 of 3 — Evaluating...',
-  4: 'Scenario 2 complete',
-  5: 'Scenario 3 of 3 — Evaluating...',
-  6: 'All scenarios complete',
-}
+// active: 0=not started, 1/2/3=which scenario, 4=show recommendations
+type ActiveScenario = 0 | 1 | 2 | 3 | 4
 
 export default function FraudEngineLive() {
-  const [phase, setPhase] = useState<DemoPhase>(0)
+  const [active, setActive] = useState<ActiveScenario>(0)
   const [key, setKey] = useState(0)
+  const [visited, setVisited] = useState<Set<number>>(new Set())
+
+  const goTo = useCallback((n: ActiveScenario) => {
+    if (n === active) return
+    setKey(k => k + 1)
+    setActive(n)
+    if (n >= 1 && n <= 3) {
+      setVisited(prev => new Set(prev).add(n))
+    }
+  }, [active])
 
   const resetDemo = useCallback(() => {
-    setPhase(0)
+    setActive(0)
     setKey(k => k + 1)
+    setVisited(new Set())
   }, [])
 
-  const startDemo = useCallback(() => {
-    setKey(k => k + 1)
-    setTimeout(() => setPhase(1), 100)
-  }, [])
-
-  const nextLabel = phase === 0
-    ? 'Start Demo'
-    : phase === 2
-    ? 'Continue — Sent to Review'
-    : phase === 4
-    ? 'Continue — Approved Transaction'
-    : null
+  const allVisited = visited.size === 3
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -581,88 +565,90 @@ export default function FraudEngineLive() {
       {/* ── Pipeline Diagram ──────────────────────── */}
       <PipelineDiagram />
 
-      {/* ── Demo Controls ─────────────────────────── */}
-      <div className="flex items-center justify-center gap-3">
-        {nextLabel && (
+      {/* ── Start / Stepper Controls ──────────────── */}
+      {active === 0 ? (
+        <div className="flex items-center justify-center">
           <button
-            onClick={phase === 0 ? startDemo : () => setPhase(p => (p + 1) as DemoPhase)}
-            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition shadow-lg shadow-blue-500/20 animate-pulse hover:animate-none"
+            onClick={() => goTo(1)}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition shadow-lg shadow-blue-500/20 animate-pulse hover:animate-none"
           >
-            {phase === 0 ? <Play className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            {nextLabel}
+            <Play className="w-4 h-4" /> Start Demo
           </button>
-        )}
-        {phase > 0 && (
-          <button
-            onClick={resetDemo}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition"
-          >
-            <RotateCcw className="w-4 h-4" /> Reset
-          </button>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {/* Clickable scenario stepper */}
+          <div className="flex items-center justify-center gap-3">
+            {scenarioLabels.map((s, i) => {
+              const n = (i + 1) as ActiveScenario
+              const isCurrent = active === n
+              const wasVisited = visited.has(n)
+              return (
+                <div key={i} className="flex items-center gap-3">
+                  <button
+                    onClick={() => goTo(n)}
+                    className={`flex items-center gap-2.5 px-4 py-2.5 rounded-lg border transition-all cursor-pointer ${
+                      isCurrent
+                        ? `${s.bg}/20 border-current ${s.color} ring-2 ${s.ring} ring-offset-2 ring-offset-[#0f1117]`
+                        : wasVisited
+                        ? 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                        : 'bg-[#161922] border-gray-800 text-gray-500 hover:border-gray-600 hover:text-gray-300'
+                    }`}
+                  >
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                      isCurrent ? `${s.bg} text-white` : wasVisited ? 'bg-gray-700 text-gray-300' : 'bg-gray-800 text-gray-600'
+                    }`}>{n}</div>
+                    <div className="text-left">
+                      <div className={`text-xs font-semibold ${isCurrent ? s.color : ''}`}>{s.label}</div>
+                      <div className="text-[10px] text-gray-500">{s.sub}</div>
+                    </div>
+                  </button>
+                  {i < 2 && <ArrowRight className="w-4 h-4 text-gray-700 shrink-0" />}
+                </div>
+              )
+            })}
 
-      {/* ── Phase indicator ───────────────────────── */}
-      {phase > 0 && (
-        <div className="flex items-center justify-center gap-4">
-          {[1, 2, 3].map(n => {
-            const casePhaseStart = (n - 1) * 2 + 1
-            const active = phase >= casePhaseStart
-            const current = phase === casePhaseStart || phase === casePhaseStart + 1
-            return (
-              <div key={n} className="flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${
-                  current ? 'bg-blue-600 text-white ring-2 ring-blue-400/50 ring-offset-2 ring-offset-[#0f1117]'
-                    : active ? 'bg-gray-700 text-gray-300'
-                    : 'bg-gray-800 text-gray-600'
-                }`}>{n}</div>
-                {n < 3 && <div className={`w-12 h-0.5 transition-all duration-500 ${active && phase > casePhaseStart ? 'bg-blue-500' : 'bg-gray-800'}`} />}
-              </div>
-            )
-          })}
+            {/* Show recommendations button after visiting all 3 */}
+            {allVisited && (
+              <>
+                <ArrowRight className="w-4 h-4 text-gray-700 shrink-0" />
+                <button
+                  onClick={() => goTo(4)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all cursor-pointer ${
+                    active === 4
+                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 ring-2 ring-blue-400/50 ring-offset-2 ring-offset-[#0f1117]'
+                      : 'bg-[#161922] border-gray-800 text-gray-500 hover:border-blue-500/30 hover:text-blue-300'
+                  }`}
+                >
+                  <Lightbulb className="w-4 h-4" />
+                  <span className="text-xs font-semibold">AI Insights</span>
+                </button>
+              </>
+            )}
+
+            <div className="w-px h-6 bg-gray-800 mx-1" />
+            <button
+              onClick={resetDemo}
+              className="flex items-center gap-1.5 px-3 py-2 text-gray-500 hover:text-gray-300 text-xs transition"
+            >
+              <RotateCcw className="w-3.5 h-3.5" /> Reset
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ── Case heading ──────────────────────────── */}
-      {phase > 0 && (
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-gray-800" />
-          <span className="text-xs uppercase tracking-widest text-gray-500 font-semibold">
-            {phaseLabels[phase]}
-          </span>
-          <div className="h-px flex-1 bg-gray-800" />
-        </div>
-      )}
-
-      {/* ── Three case simulations ────────────────── */}
-      {phase > 0 && (
-        <div key={key} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* ── Case simulation (one at a time, full width) ── */}
+      {active >= 1 && active <= 3 && (
+        <div key={`${key}-${active}`} className="max-w-2xl mx-auto">
           <CaseSimulation
-            key={`${key}-1`}
-            fraudCase={CASES[0]}
-            playing={phase >= 1 && phase <= 2}
-            dimmed={phase > 2}
-            onComplete={() => { if (phase === 1) setPhase(2) }}
-          />
-          <CaseSimulation
-            key={`${key}-2`}
-            fraudCase={CASES[1]}
-            playing={phase >= 3 && phase <= 4}
-            dimmed={phase < 3 || phase > 4}
-            onComplete={() => { if (phase === 3) setPhase(4) }}
-          />
-          <CaseSimulation
-            key={`${key}-3`}
-            fraudCase={CASES[2]}
-            playing={phase >= 5}
-            dimmed={phase < 5}
-            onComplete={() => { if (phase === 5) setPhase(6) }}
+            fraudCase={CASES[active - 1]}
+            playing={true}
           />
         </div>
       )}
 
-      {/* ── AI Recommendations (after all scenarios) ── */}
-      {phase === 6 && (
+      {/* ── AI Recommendations ────────────────────── */}
+      {active === 4 && (
         <div>
           <div className="flex items-center gap-3 mb-3">
             <div className="h-px flex-1 bg-gray-800" />
