@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type CSSProperties } from 'react'
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react'
 import {
   Shield, AlertTriangle, CheckCircle, XCircle, Clock, Bot, User,
   Play, RotateCcw, Zap, MapPin, Cpu, Smartphone,
@@ -317,6 +317,8 @@ function CaseSimulation({ fraudCase, playing, onComplete, dimmed }: {
   const [started, setStarted] = useState(false)
   const [done, setDone] = useState(false)
   const maxStep = TOTAL_STEPS[fraudCase.outcome]
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
 
   useEffect(() => {
     if (!playing) { setStarted(false); setStep(-1); setDone(false); return }
@@ -331,15 +333,14 @@ function CaseSimulation({ fraudCase, playing, onComplete, dimmed }: {
     return () => clearTimeout(t)
   }, [step, started, maxStep])
 
-  // Report completion
+  // Report completion via ref to avoid stale closure / timeout cancellation
   useEffect(() => {
     if (step >= maxStep && !done) {
       setDone(true)
-      // Small delay so the last animation finishes
-      const t = setTimeout(() => onComplete?.(), 800)
+      const t = setTimeout(() => onCompleteRef.current?.(), 800)
       return () => clearTimeout(t)
     }
-  }, [step, maxStep, done, onComplete])
+  }, [step, maxStep, done])
 
   const c = outcomeColor[fraudCase.outcome]
   const showTxn = step >= 0
