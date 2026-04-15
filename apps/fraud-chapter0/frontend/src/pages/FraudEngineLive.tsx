@@ -3,7 +3,7 @@ import {
   Shield, AlertTriangle, CheckCircle, XCircle, Clock, Bot, User,
   Play, RotateCcw, Zap, MapPin, Cpu, Smartphone,
   ShieldCheck, ShieldX, ShieldAlert, ArrowRight, Loader2, Lightbulb,
-  Network, Signal, Phone,
+  Network, Signal, Phone, ChevronRight,
 } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════════
@@ -109,7 +109,6 @@ const CASES: FraudCase[] = [
   },
 ]
 
-// Steps per case. All cases have agent summary steps.
 const TOTAL_STEPS = { blocked: 15, review: 15, passed: 15 }
 const STEP_MS = 650
 
@@ -308,35 +307,44 @@ function RecommendationCard({ rec, visible, delay }: {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Case Simulation Card
+   Case Simulation Card — now reports completion
    ═══════════════════════════════════════════════════════════════ */
 
-function CaseSimulation({ fraudCase, playing, stagger }: {
-  fraudCase: FraudCase; playing: boolean; stagger: number
+function CaseSimulation({ fraudCase, playing, onComplete, dimmed }: {
+  fraudCase: FraudCase; playing: boolean; onComplete?: () => void; dimmed?: boolean
 }) {
   const [step, setStep] = useState(-1)
   const [started, setStarted] = useState(false)
+  const [done, setDone] = useState(false)
   const maxStep = TOTAL_STEPS[fraudCase.outcome]
 
-  // Staggered start
   useEffect(() => {
-    if (!playing) { setStarted(false); setStep(-1); return }
-    const t = setTimeout(() => { setStarted(true); setStep(0) }, stagger)
-    return () => clearTimeout(t)
-  }, [playing, stagger])
+    if (!playing) { setStarted(false); setStep(-1); setDone(false); return }
+    setStarted(true)
+    setStep(0)
+  }, [playing])
 
-  // Step progression
   useEffect(() => {
     if (!started || step < 0 || step >= maxStep) return
-    const delay = step === 8 ? 1200 : STEP_MS // pause longer on decision
+    const delay = step === 8 ? 1200 : STEP_MS
     const t = setTimeout(() => setStep(s => s + 1), delay)
     return () => clearTimeout(t)
   }, [step, started, maxStep])
 
+  // Report completion
+  useEffect(() => {
+    if (step >= maxStep && !done) {
+      setDone(true)
+      // Small delay so the last animation finishes
+      const t = setTimeout(() => onComplete?.(), 800)
+      return () => clearTimeout(t)
+    }
+  }, [step, maxStep, done, onComplete])
+
   const c = outcomeColor[fraudCase.outcome]
   const showTxn = step >= 0
   const showScanHeader = step >= 1
-  const ruleSteps = [2, 3, 4, 5] // steps at which rules 0-3 appear
+  const ruleSteps = [2, 3, 4, 5]
   const showDevice = step >= 6
   const showScore = step >= 7
   const showDecision = step >= 9
@@ -344,7 +352,9 @@ function CaseSimulation({ fraudCase, playing, stagger }: {
   const agentStartStep = 11
 
   return (
-    <div className={`relative bg-[#161922] border ${c.border} rounded-xl overflow-hidden flex flex-col`}>
+    <div className={`relative bg-[#161922] border ${c.border} rounded-xl overflow-hidden flex flex-col transition-all duration-500 ${
+      dimmed ? 'opacity-30 scale-[0.97]' : 'opacity-100 scale-100'
+    }`}>
       {/* Card header */}
       <div className={`px-4 py-3 border-b border-gray-800 ${c.bg}`}>
         <div className="flex items-center gap-2">
@@ -360,12 +370,10 @@ function CaseSimulation({ fraudCase, playing, stagger }: {
 
       {/* Card body */}
       <div className="p-4 flex-1 relative">
-        {/* Decision popup overlay */}
         {showDecision && !showDecisionDismiss && (
           <DecisionPopup outcome={fraudCase.outcome} visible={showDecision} />
         )}
 
-        {/* Transaction details */}
         <div style={fade(showTxn)}>
           <div className="flex items-center gap-2 mb-2">
             <Zap className="w-3.5 h-3.5 text-blue-400" />
@@ -384,7 +392,6 @@ function CaseSimulation({ fraudCase, playing, stagger }: {
           </div>
         </div>
 
-        {/* CDR Rules scanning */}
         <div style={fade(showScanHeader)}>
           <div className="flex items-center gap-2 mb-1 mt-1">
             <Network className="w-3.5 h-3.5 text-cyan-400" />
@@ -407,7 +414,6 @@ function CaseSimulation({ fraudCase, playing, stagger }: {
           </div>
         </div>
 
-        {/* Device trust */}
         <div style={fade(showDevice)} className="mb-1">
           <div className="flex items-center gap-2 mb-1">
             <Smartphone className="w-3.5 h-3.5 text-gray-400" />
@@ -426,10 +432,8 @@ function CaseSimulation({ fraudCase, playing, stagger }: {
           </div>
         </div>
 
-        {/* Fraud score */}
         <ScoreBar score={fraudCase.score} visible={showScore} />
 
-        {/* Agent section (all cases) */}
         {fraudCase.agentSummary && step >= agentStartStep && (
           <AgentSection
             summary={fraudCase.agentSummary}
@@ -445,7 +449,7 @@ function CaseSimulation({ fraudCase, playing, stagger }: {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   KPI Cards (top-level fraud insights)
+   KPI Cards
    ═══════════════════════════════════════════════════════════════ */
 
 function KPIRow() {
@@ -515,29 +519,43 @@ function PipelineDiagram() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Main Page
+   Main Page — Interactive sequential flow
    ═══════════════════════════════════════════════════════════════ */
 
-export default function FraudEngineLive() {
-  const [playing, setPlaying] = useState(false)
-  const [demoKey, setDemoKey] = useState(0)
+// Phase: 0=idle, 1=case1 playing, 2=case1 done, 3=case2 playing, 4=case2 done, 5=case3 playing, 6=all done
+type DemoPhase = 0 | 1 | 2 | 3 | 4 | 5 | 6
 
-  const startDemo = useCallback(() => {
-    setPlaying(false)
-    setDemoKey(k => k + 1)
-    setTimeout(() => setPlaying(true), 100)
-  }, [])
+const phaseLabels: Record<DemoPhase, string> = {
+  0: '',
+  1: 'Scenario 1 of 3 — Evaluating...',
+  2: 'Scenario 1 complete',
+  3: 'Scenario 2 of 3 — Evaluating...',
+  4: 'Scenario 2 complete',
+  5: 'Scenario 3 of 3 — Evaluating...',
+  6: 'All scenarios complete',
+}
+
+export default function FraudEngineLive() {
+  const [phase, setPhase] = useState<DemoPhase>(0)
+  const [key, setKey] = useState(0)
 
   const resetDemo = useCallback(() => {
-    setPlaying(false)
-    setDemoKey(k => k + 1)
+    setPhase(0)
+    setKey(k => k + 1)
   }, [])
 
-  // Auto-start on mount
-  useEffect(() => {
-    const t = setTimeout(() => startDemo(), 600)
-    return () => clearTimeout(t)
+  const startDemo = useCallback(() => {
+    setKey(k => k + 1)
+    setTimeout(() => setPhase(1), 100)
   }, [])
+
+  const nextLabel = phase === 0
+    ? 'Start Demo'
+    : phase === 2
+    ? 'Continue — Sent to Review'
+    : phase === 4
+    ? 'Continue — Approved Transaction'
+    : null
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -564,61 +582,106 @@ export default function FraudEngineLive() {
 
       {/* ── Demo Controls ─────────────────────────── */}
       <div className="flex items-center justify-center gap-3">
-        <button
-          onClick={startDemo}
-          className="flex items-center gap-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition shadow-lg shadow-blue-500/20"
-        >
-          <Play className="w-4 h-4" /> {playing ? 'Restart Demo' : 'Start Live Demo'}
-        </button>
-        {playing && (
+        {nextLabel && (
+          <button
+            onClick={phase === 0 ? startDemo : () => setPhase(p => (p + 1) as DemoPhase)}
+            className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition shadow-lg shadow-blue-500/20 animate-pulse hover:animate-none"
+          >
+            {phase === 0 ? <Play className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            {nextLabel}
+          </button>
+        )}
+        {phase > 0 && (
           <button
             onClick={resetDemo}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition"
+            className="flex items-center gap-2 px-4 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition"
           >
             <RotateCcw className="w-4 h-4" /> Reset
           </button>
         )}
       </div>
 
+      {/* ── Phase indicator ───────────────────────── */}
+      {phase > 0 && (
+        <div className="flex items-center justify-center gap-4">
+          {[1, 2, 3].map(n => {
+            const casePhaseStart = (n - 1) * 2 + 1
+            const active = phase >= casePhaseStart
+            const current = phase === casePhaseStart || phase === casePhaseStart + 1
+            return (
+              <div key={n} className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-500 ${
+                  current ? 'bg-blue-600 text-white ring-2 ring-blue-400/50 ring-offset-2 ring-offset-[#0f1117]'
+                    : active ? 'bg-gray-700 text-gray-300'
+                    : 'bg-gray-800 text-gray-600'
+                }`}>{n}</div>
+                {n < 3 && <div className={`w-12 h-0.5 transition-all duration-500 ${active && phase > casePhaseStart ? 'bg-blue-500' : 'bg-gray-800'}`} />}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
       {/* ── Case heading ──────────────────────────── */}
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-800" />
-        <span className="text-xs uppercase tracking-widest text-gray-500 font-semibold">Live Engine Evaluation — 3 Scenarios</span>
-        <div className="h-px flex-1 bg-gray-800" />
-      </div>
-
-      {/* ── Three case simulations ────────────────── */}
-      <div key={demoKey} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {CASES.map((fc, i) => (
-          <CaseSimulation
-            key={`${demoKey}-${fc.id}`}
-            fraudCase={fc}
-            playing={playing}
-            stagger={i * 800}
-          />
-        ))}
-      </div>
-
-      {/* ── AI Recommendations ────────────────────── */}
-      <div>
-        <div className="flex items-center gap-3 mb-3">
+      {phase > 0 && (
+        <div className="flex items-center gap-3">
           <div className="h-px flex-1 bg-gray-800" />
-          <span className="text-xs uppercase tracking-widest text-gray-500 font-semibold flex items-center gap-1.5">
-            <Lightbulb className="w-3.5 h-3.5 text-blue-400" /> AI-Generated Prevention Recommendations
+          <span className="text-xs uppercase tracking-widest text-gray-500 font-semibold">
+            {phaseLabels[phase]}
           </span>
           <div className="h-px flex-1 bg-gray-800" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {CASES.map((fc, i) => (
-            <RecommendationCard
-              key={fc.id}
-              rec={fc.recommendation}
-              visible={playing}
-              delay={8000 + i * 600}
-            />
-          ))}
+      )}
+
+      {/* ── Three case simulations ────────────────── */}
+      {phase > 0 && (
+        <div key={key} className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <CaseSimulation
+            key={`${key}-1`}
+            fraudCase={CASES[0]}
+            playing={phase >= 1 && phase <= 2}
+            dimmed={phase > 2}
+            onComplete={() => { if (phase === 1) setPhase(2) }}
+          />
+          <CaseSimulation
+            key={`${key}-2`}
+            fraudCase={CASES[1]}
+            playing={phase >= 3 && phase <= 4}
+            dimmed={phase < 3 || phase > 4}
+            onComplete={() => { if (phase === 3) setPhase(4) }}
+          />
+          <CaseSimulation
+            key={`${key}-3`}
+            fraudCase={CASES[2]}
+            playing={phase >= 5}
+            dimmed={phase < 5}
+            onComplete={() => { if (phase === 5) setPhase(6) }}
+          />
         </div>
-      </div>
+      )}
+
+      {/* ── AI Recommendations (after all scenarios) ── */}
+      {phase === 6 && (
+        <div>
+          <div className="flex items-center gap-3 mb-3">
+            <div className="h-px flex-1 bg-gray-800" />
+            <span className="text-xs uppercase tracking-widest text-gray-500 font-semibold flex items-center gap-1.5">
+              <Lightbulb className="w-3.5 h-3.5 text-blue-400" /> AI-Generated Prevention Recommendations
+            </span>
+            <div className="h-px flex-1 bg-gray-800" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {CASES.map((fc, i) => (
+              <RecommendationCard
+                key={fc.id}
+                rec={fc.recommendation}
+                visible={true}
+                delay={i * 400}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
