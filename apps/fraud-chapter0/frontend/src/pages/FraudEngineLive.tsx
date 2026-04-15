@@ -524,6 +524,7 @@ export default function FraudEngineLive() {
   const [active, setActive] = useState<ActiveScenario>(0)
   const [key, setKey] = useState(0)
   const [visited, setVisited] = useState<Set<number>>(new Set())
+  const [autoplay, setAutoplay] = useState(false)
 
   const goTo = useCallback((n: ActiveScenario) => {
     if (n === active) return
@@ -538,7 +539,32 @@ export default function FraudEngineLive() {
     setActive(0)
     setKey(k => k + 1)
     setVisited(new Set())
+    setAutoplay(false)
   }, [])
+
+  const startAutoplay = useCallback(() => {
+    setAutoplay(true)
+    setKey(k => k + 1)
+    setActive(1)
+    setVisited(new Set([1]))
+  }, [])
+
+  // Autoplay: advance to next scenario after each finishes
+  useEffect(() => {
+    if (!autoplay) return
+    if (active === 0) return
+    // 13s per case (15 steps × ~650ms + extra for typing)
+    const next: ActiveScenario | null = active === 1 ? 2 : active === 2 ? 3 : active === 3 ? 4 : null
+    if (!next) { setAutoplay(false); return }
+    const t = setTimeout(() => {
+      setKey(k => k + 1)
+      setActive(next)
+      if (next >= 1 && next <= 3) {
+        setVisited(prev => new Set(prev).add(next))
+      }
+    }, 13000)
+    return () => clearTimeout(t)
+  }, [active, autoplay])
 
   const allVisited = visited.size === 3
 
@@ -567,12 +593,18 @@ export default function FraudEngineLive() {
 
       {/* ── Start / Stepper Controls ──────────────── */}
       {active === 0 ? (
-        <div className="flex items-center justify-center">
+        <div className="flex items-center justify-center gap-3">
           <button
             onClick={() => goTo(1)}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition shadow-lg shadow-blue-500/20 animate-pulse hover:animate-none"
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition shadow-lg shadow-blue-500/20"
           >
             <Play className="w-4 h-4" /> Start Demo
+          </button>
+          <button
+            onClick={startAutoplay}
+            className="flex items-center gap-2 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition"
+          >
+            <Play className="w-4 h-4" /> Auto-Play All
           </button>
         </div>
       ) : (
@@ -627,6 +659,14 @@ export default function FraudEngineLive() {
             )}
 
             <div className="w-px h-6 bg-gray-800 mx-1" />
+            {autoplay && (
+              <button
+                onClick={() => setAutoplay(false)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg text-blue-400 text-xs transition hover:bg-blue-500/20"
+              >
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Auto-Playing...
+              </button>
+            )}
             <button
               onClick={resetDemo}
               className="flex items-center gap-1.5 px-3 py-2 text-gray-500 hover:text-gray-300 text-xs transition"
