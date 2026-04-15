@@ -12,6 +12,7 @@ End-to-end fraud prevention on Databricks — from data pipeline to analyst work
 - **Data Pipeline**: Medallion architecture (Bronze/Silver/Gold) generating 100K synthetic transactions and 10K device profiles with fraud scoring
 - **Fraud Analyst Workbench**: Three role-based views (Executive, Management, Analyst) backed by Lakebase, Genie Spaces, Knowledge Assistants, and Foundation Model API
 - **AI Agent**: ReAct-style investigation assistant with 5 database-backed tools
+- **Fraud Engine Demo (Chapter 0)**: Interactive C-level demo showcasing the fraud detection engine with animated CDR rule evaluation, AgentBricks AI summaries, and prevention recommendations
 
 **Default: Telecom Fraud.** The app is industry-configurable — edit `apps/fraud-analyst/server/industry_config.py` to retarget for fintech, insurance, e-commerce, or any scored risk/fraud use case. See [`apps/fraud-analyst/README.md`](apps/fraud-analyst/README.md) for the full app setup guide.
 
@@ -93,6 +94,30 @@ databricks workspace import-dir apps/fraud-analyst \
 databricks apps create <app-name> -p <your-profile>
 databricks apps deploy <app-name> \
   --source-code-path /Workspace/Users/<you>/fraud-analyst -p <your-profile>
+```
+
+## Fraud Engine Demo (Chapter 0)
+
+A standalone interactive demo designed for C-level and GTM presentations. Three data sources (CDR Data, Device SDK, Transaction History) feed the fraud detection engine, which evaluates every transaction against CDR rules and produces one of three outcomes.
+
+| Scenario | Outcome | What It Shows |
+|----------|---------|---------------|
+| **International SIM Swap** | Auto-Blocked | All 4 CDR rules fail (impossible travel, cell/IP mismatch, rapid cell hop, roaming anomaly). Engine blocks instantly. |
+| **After-Hours Activity** | Sent to Review | Mixed signals — AgentBricks AI summarizes the case and assigns it to an analyst. Links to the Analyst case queue. |
+| **Routine Device Upgrade** | Approved | All checks pass. Zero-friction approval. Customer never notices. |
+
+Each scenario shows a two-column layout: transaction analysis with animated CDR rule evaluation on the left, AgentBricks summary + AI recommendation + engine decision on the right.
+
+**Two demo modes:** Manual (click scenario tabs) or Auto-Play All (hands-free, ~13s per scenario).
+
+Deploy as a separate Databricks App — see [`apps/fraud-chapter0/`](apps/fraud-chapter0/) for source.
+
+```bash
+databricks workspace import-dir apps/fraud-chapter0 \
+  /Workspace/Users/<you>/fraud-chapter0 --overwrite -p <your-profile>
+databricks apps create fraud-chapter0 -p <your-profile>
+databricks apps deploy fraud-chapter0 \
+  --source-code-path /Workspace/Users/<you>/fraud-chapter0 -p <your-profile>
 ```
 
 ## Fraud Analyst Workbench
@@ -188,6 +213,13 @@ fraud_prevention_in_telco/
 │   │       └── chat.py                     # AI chat + Knowledge Assistant
 │   └── frontend/
 │       ├── src/                            # React source (TypeScript)
+│       └── dist/                           # Pre-built frontend
+├── apps/fraud-chapter0/
+│   ├── app.yaml                            # Standalone demo app manifest
+│   ├── app.py                              # FastAPI static file server
+│   ├── requirements.txt                    # Python deps (fastapi, uvicorn)
+│   └── frontend/
+│       ├── src/pages/FraudEngineLive.tsx   # ★ Interactive fraud engine demo
 │       └── dist/                           # Pre-built frontend
 ├── CONTRIBUTING.md
 └── SECURITY.md
