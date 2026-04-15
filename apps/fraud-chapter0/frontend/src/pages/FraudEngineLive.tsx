@@ -3,7 +3,7 @@ import {
   Shield, AlertTriangle, CheckCircle, XCircle, Clock, Bot, User,
   Play, RotateCcw, Zap, MapPin, Cpu, Smartphone,
   ShieldCheck, ShieldX, ShieldAlert, ArrowRight, Loader2, Lightbulb,
-  Network, Signal, Phone,
+  Network, Signal, Phone, History, Database,
 } from 'lucide-react'
 
 /* ═══════════════════════════════════════════════════════════════
@@ -483,8 +483,12 @@ function KPIRow() {
    ═══════════════════════════════════════════════════════════════ */
 
 function PipelineDiagram() {
-  const steps = [
-    { icon: Phone, label: 'CDR Event', sub: 'Call / SMS / Data', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
+  const dataSources = [
+    { icon: Phone, label: 'CDR Data', sub: 'Call / SMS / Data', color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
+    { icon: Smartphone, label: 'Device SDK', sub: 'Trust / Encryption', color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
+    { icon: History, label: 'Txn History', sub: 'Patterns / Velocity', color: 'text-sky-400', bg: 'bg-sky-500/10 border-sky-500/20' },
+  ]
+  const engine = [
     { icon: Network, label: 'Rule Engine', sub: 'R1·R5·R7·R13', color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
     { icon: Cpu, label: 'Risk Scoring', sub: 'ML + Rules', color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
   ]
@@ -495,22 +499,41 @@ function PipelineDiagram() {
   ]
 
   return (
-    <div className="bg-[#161922] border border-gray-800 rounded-lg p-4">
-      <div className="flex items-center justify-center gap-2 flex-wrap">
-        {steps.map((s, i) => (
-          <div key={s.label} className="flex items-center gap-2">
-            <div className={`${s.bg} border rounded-lg px-3 py-2 text-center min-w-[90px]`}>
-              <s.icon className={`w-4 h-4 ${s.color} mx-auto mb-1`} />
+    <div className="bg-[#161922] border border-gray-800 rounded-lg p-5">
+      <div className="flex items-center justify-center gap-3 flex-wrap">
+        {/* 3 parallel data sources */}
+        <div className="flex flex-col gap-1.5">
+          {dataSources.map(s => (
+            <div key={s.label} className={`${s.bg} border rounded-lg px-3 py-1.5 flex items-center gap-2 min-w-[140px]`}>
+              <s.icon className={`w-4 h-4 ${s.color} shrink-0`} />
+              <div>
+                <div className={`text-[10px] font-semibold ${s.color}`}>{s.label}</div>
+                <div className="text-[9px] text-gray-500">{s.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <ArrowRight className="w-4 h-4 text-gray-600 shrink-0" />
+
+        {/* Engine stages */}
+        {engine.map((s, i) => (
+          <div key={s.label} className="flex items-center gap-3">
+            <div className={`${s.bg} border rounded-lg px-4 py-3 text-center min-w-[100px]`}>
+              <s.icon className={`w-5 h-5 ${s.color} mx-auto mb-1`} />
               <div className={`text-[10px] font-semibold ${s.color}`}>{s.label}</div>
               <div className="text-[9px] text-gray-500">{s.sub}</div>
             </div>
-            {i < steps.length - 1 && <ArrowRight className="w-4 h-4 text-gray-600 shrink-0" />}
+            {i < engine.length - 1 && <ArrowRight className="w-4 h-4 text-gray-600 shrink-0" />}
           </div>
         ))}
+
         <ArrowRight className="w-4 h-4 text-gray-600 shrink-0" />
+
+        {/* 3 outcomes */}
         <div className="flex flex-col gap-1.5">
           {outcomes.map(o => (
-            <div key={o.label} className={`${o.bg} border rounded-lg px-3 py-1 flex items-center gap-1.5 min-w-[110px]`}>
+            <div key={o.label} className={`${o.bg} border rounded-lg px-3 py-1.5 flex items-center gap-2 min-w-[120px]`}>
               <o.icon className={`w-3.5 h-3.5 ${o.color}`} />
               <span className={`text-[10px] font-semibold ${o.color}`}>{o.label}</span>
             </div>
