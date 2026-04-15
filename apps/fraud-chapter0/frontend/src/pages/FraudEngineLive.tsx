@@ -284,34 +284,12 @@ function AgentSection({ summary, analyst, outcome, step, agentStartStep }: {
   )
 }
 
-function RecommendationCard({ rec, visible, delay }: {
-  rec: { title: string; body: string }; visible: boolean; delay: number
-}) {
-  const [show, setShow] = useState(false)
-  useEffect(() => {
-    if (!visible) { setShow(false); return }
-    const t = setTimeout(() => setShow(true), delay)
-    return () => clearTimeout(t)
-  }, [visible, delay])
-
-  return (
-    <div style={fade(show)} className="bg-[#161922] border border-blue-500/20 rounded-lg p-4 hover:border-blue-500/40 transition">
-      <div className="flex items-center gap-2 mb-2">
-        <Lightbulb className="w-4 h-4 text-blue-400" />
-        <span className="text-xs font-semibold text-blue-300">AI Recommendation</span>
-      </div>
-      <h3 className="text-sm font-semibold text-white mb-1.5">{rec.title}</h3>
-      <p className="text-xs text-gray-400 leading-relaxed">{rec.body}</p>
-    </div>
-  )
-}
-
 /* ═══════════════════════════════════════════════════════════════
-   Case Simulation Card — now reports completion
+   Case Simulation — two-column layout
    ═══════════════════════════════════════════════════════════════ */
 
-function CaseSimulation({ fraudCase, playing, dimmed }: {
-  fraudCase: FraudCase; playing: boolean; dimmed?: boolean
+function CaseSimulation({ fraudCase, playing }: {
+  fraudCase: FraudCase; playing: boolean
 }) {
   const [step, setStep] = useState(-1)
   const [started, setStarted] = useState(false)
@@ -341,88 +319,91 @@ function CaseSimulation({ fraudCase, playing, dimmed }: {
   const agentStartStep = 11
 
   return (
-    <div className={`relative bg-[#161922] border ${c.border} rounded-xl overflow-hidden flex flex-col transition-all duration-500 ${
-      dimmed ? 'opacity-30 scale-[0.97]' : 'opacity-100 scale-100'
-    }`}>
-      {/* Card header */}
-      <div className={`px-4 py-3 border-b border-gray-800 ${c.bg}`}>
-        <div className="flex items-center gap-2">
-          {fraudCase.outcome === 'blocked' && <ShieldX className="w-4 h-4 text-red-400" />}
-          {fraudCase.outcome === 'review' && <ShieldAlert className="w-4 h-4 text-amber-400" />}
-          {fraudCase.outcome === 'passed' && <ShieldCheck className="w-4 h-4 text-emerald-400" />}
-          <span className={`text-xs font-bold uppercase tracking-wider ${c.text}`}>
-            {fraudCase.outcome === 'blocked' ? 'Auto-Blocked' : fraudCase.outcome === 'review' ? 'Sent to Review' : 'Approved'}
-          </span>
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      {/* ── Left: Transaction Analysis ── */}
+      <div className={`relative bg-[#161922] border ${c.border} rounded-xl overflow-hidden flex flex-col`}>
+        <div className={`px-4 py-3 border-b border-gray-800 ${c.bg}`}>
+          <div className="flex items-center gap-2">
+            {fraudCase.outcome === 'blocked' && <ShieldX className="w-4 h-4 text-red-400" />}
+            {fraudCase.outcome === 'review' && <ShieldAlert className="w-4 h-4 text-amber-400" />}
+            {fraudCase.outcome === 'passed' && <ShieldCheck className="w-4 h-4 text-emerald-400" />}
+            <span className={`text-xs font-bold uppercase tracking-wider ${c.text}`}>
+              {fraudCase.outcome === 'blocked' ? 'Auto-Blocked' : fraudCase.outcome === 'review' ? 'Sent to Review' : 'Approved'}
+            </span>
+          </div>
+          <h3 className="text-sm font-semibold text-white mt-1">{fraudCase.title}</h3>
         </div>
-        <h3 className="text-sm font-semibold text-white mt-1">{fraudCase.title}</h3>
+
+        <div className="p-4 flex-1 relative">
+          {showDecision && !showDecisionDismiss && (
+            <DecisionPopup outcome={fraudCase.outcome} visible={showDecision} />
+          )}
+
+          <div style={fade(showTxn)}>
+            <div className="flex items-center gap-2 mb-2">
+              <Zap className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Incoming Transaction</span>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs mb-3">
+              <div><span className="text-gray-500">Customer</span><p className="text-white font-medium">{fraudCase.customer}</p></div>
+              <div><span className="text-gray-500">Amount</span><p className="text-white font-mono font-semibold">{fraudCase.amount}</p></div>
+              <div><span className="text-gray-500">Type</span><p className="text-gray-300">{fraudCase.transactionType}</p></div>
+              <div><span className="text-gray-500">Time</span><p className="text-gray-300">{fraudCase.time}</p></div>
+              <div className="col-span-2 flex items-center gap-1 mt-0.5">
+                <MapPin className="w-3 h-3 text-gray-500" />
+                <span className="text-gray-300">{fraudCase.location}</span>
+                <span className="text-[10px] text-gray-600 ml-1">({fraudCase.locationDetail})</span>
+              </div>
+            </div>
+          </div>
+
+          <div style={fade(showScanHeader)}>
+            <div className="flex items-center gap-2 mb-1 mt-1">
+              <Network className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">CDR Rules Evaluation</span>
+              {showScanHeader && step < 6 && (
+                <span className="flex items-center gap-1 text-[10px] text-cyan-400">
+                  <Signal className="w-3 h-3 animate-pulse" /> Scanning...
+                </span>
+              )}
+            </div>
+            <div className="border border-gray-800 rounded-lg px-3 py-1 mb-2 bg-[#0f1117]/50">
+              {fraudCase.rules.map((rule, i) => (
+                <RuleCheck
+                  key={rule.id}
+                  rule={rule}
+                  visible={step >= ruleSteps[i]}
+                  evaluating={step === ruleSteps[i]}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div style={fade(showDevice)} className="mb-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Smartphone className="w-3.5 h-3.5 text-gray-400" />
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Device Trust</span>
+            </div>
+            <div className="flex items-center gap-3 bg-[#0f1117]/50 border border-gray-800 rounded-lg px-3 py-2">
+              <div className="shrink-0">
+                <div className={`text-sm font-bold font-mono ${
+                  fraudCase.device.score >= 80 ? 'text-emerald-400' : fraudCase.device.score >= 50 ? 'text-amber-400' : 'text-red-400'
+                }`}>{fraudCase.device.score}/100</div>
+                <div className={`text-[9px] font-semibold ${
+                  fraudCase.device.score >= 80 ? 'text-emerald-500' : fraudCase.device.score >= 50 ? 'text-amber-500' : 'text-red-500'
+                }`}>{fraudCase.device.label}</div>
+              </div>
+              <div className="text-[10px] text-gray-500">{fraudCase.device.detail}</div>
+            </div>
+          </div>
+
+          <ScoreBar score={fraudCase.score} visible={showScore} />
+        </div>
       </div>
 
-      {/* Card body */}
-      <div className="p-4 flex-1 relative">
-        {showDecision && !showDecisionDismiss && (
-          <DecisionPopup outcome={fraudCase.outcome} visible={showDecision} />
-        )}
-
-        <div style={fade(showTxn)}>
-          <div className="flex items-center gap-2 mb-2">
-            <Zap className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Incoming Transaction</span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs mb-3">
-            <div><span className="text-gray-500">Customer</span><p className="text-white font-medium">{fraudCase.customer}</p></div>
-            <div><span className="text-gray-500">Amount</span><p className="text-white font-mono font-semibold">{fraudCase.amount}</p></div>
-            <div><span className="text-gray-500">Type</span><p className="text-gray-300">{fraudCase.transactionType}</p></div>
-            <div><span className="text-gray-500">Time</span><p className="text-gray-300">{fraudCase.time}</p></div>
-            <div className="col-span-2 flex items-center gap-1 mt-0.5">
-              <MapPin className="w-3 h-3 text-gray-500" />
-              <span className="text-gray-300">{fraudCase.location}</span>
-              <span className="text-[10px] text-gray-600 ml-1">({fraudCase.locationDetail})</span>
-            </div>
-          </div>
-        </div>
-
-        <div style={fade(showScanHeader)}>
-          <div className="flex items-center gap-2 mb-1 mt-1">
-            <Network className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">CDR Rules Evaluation</span>
-            {showScanHeader && step < 6 && (
-              <span className="flex items-center gap-1 text-[10px] text-cyan-400">
-                <Signal className="w-3 h-3 animate-pulse" /> Scanning...
-              </span>
-            )}
-          </div>
-          <div className="border border-gray-800 rounded-lg px-3 py-1 mb-2 bg-[#0f1117]/50">
-            {fraudCase.rules.map((rule, i) => (
-              <RuleCheck
-                key={rule.id}
-                rule={rule}
-                visible={step >= ruleSteps[i]}
-                evaluating={step === ruleSteps[i]}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div style={fade(showDevice)} className="mb-1">
-          <div className="flex items-center gap-2 mb-1">
-            <Smartphone className="w-3.5 h-3.5 text-gray-400" />
-            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Device Trust</span>
-          </div>
-          <div className="flex items-center gap-3 bg-[#0f1117]/50 border border-gray-800 rounded-lg px-3 py-2">
-            <div className="shrink-0">
-              <div className={`text-sm font-bold font-mono ${
-                fraudCase.device.score >= 80 ? 'text-emerald-400' : fraudCase.device.score >= 50 ? 'text-amber-400' : 'text-red-400'
-              }`}>{fraudCase.device.score}/100</div>
-              <div className={`text-[9px] font-semibold ${
-                fraudCase.device.score >= 80 ? 'text-emerald-500' : fraudCase.device.score >= 50 ? 'text-amber-500' : 'text-red-500'
-              }`}>{fraudCase.device.label}</div>
-            </div>
-            <div className="text-[10px] text-gray-500">{fraudCase.device.detail}</div>
-          </div>
-        </div>
-
-        <ScoreBar score={fraudCase.score} visible={showScore} />
-
+      {/* ── Right: AgentBricks + AI Insight + Action ── */}
+      <div className="space-y-4">
+        {/* AgentBricks Summary */}
         {fraudCase.agentSummary && step >= agentStartStep && (
           <AgentSection
             summary={fraudCase.agentSummary}
@@ -432,6 +413,39 @@ function CaseSimulation({ fraudCase, playing, dimmed }: {
             agentStartStep={agentStartStep}
           />
         )}
+
+        {/* AI Recommendation */}
+        <div style={fade(step >= agentStartStep + 2)}>
+          <div className="bg-[#161922] border border-blue-500/20 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Lightbulb className="w-4 h-4 text-blue-400" />
+              <span className="text-xs font-semibold text-blue-300">AI Recommendation</span>
+            </div>
+            <h3 className="text-sm font-semibold text-white mb-1.5">{fraudCase.recommendation.title}</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">{fraudCase.recommendation.body}</p>
+          </div>
+        </div>
+
+        {/* Engine Action */}
+        <div style={fade(step >= 9)} className={`bg-[#161922] border rounded-lg p-4 ${c.border}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <Cpu className="w-4 h-4 ${c.text}" />
+            <span className={`text-xs font-semibold ${c.text}`}>Engine Decision</span>
+          </div>
+          <div className="flex items-center gap-3">
+            {fraudCase.outcome === 'blocked' && <ShieldX className="w-8 h-8 text-red-400" />}
+            {fraudCase.outcome === 'review' && <ShieldAlert className="w-8 h-8 text-amber-400" />}
+            {fraudCase.outcome === 'passed' && <ShieldCheck className="w-8 h-8 text-emerald-400" />}
+            <div>
+              <div className={`text-sm font-bold ${c.text}`}>{outcomeLabel[fraudCase.outcome]}</div>
+              <div className="text-xs text-gray-500 mt-0.5">
+                {fraudCase.outcome === 'blocked' && `Score: ${fraudCase.score} · Auto-blocked · Customer notified via SMS`}
+                {fraudCase.outcome === 'review' && `Score: ${fraudCase.score} · Escalated to AgentBricks · Assigned to ${fraudCase.assignedAnalyst}`}
+                {fraudCase.outcome === 'passed' && `Score: ${fraudCase.score} · All checks clear · Zero friction approval`}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )
@@ -517,8 +531,8 @@ const scenarioLabels = [
   { label: 'Approved', sub: 'Device Upgrade', color: 'text-emerald-400', bg: 'bg-emerald-500', ring: 'ring-emerald-400/50' },
 ]
 
-// active: 0=not started, 1/2/3=which scenario, 4=show recommendations
-type ActiveScenario = 0 | 1 | 2 | 3 | 4
+// active: 0=not started, 1/2/3=which scenario
+type ActiveScenario = 0 | 1 | 2 | 3
 
 export default function FraudEngineLive() {
   const [active, setActive] = useState<ActiveScenario>(0)
@@ -554,7 +568,7 @@ export default function FraudEngineLive() {
     if (!autoplay) return
     if (active === 0) return
     // 13s per case (15 steps × ~650ms + extra for typing)
-    const next: ActiveScenario | null = active === 1 ? 2 : active === 2 ? 3 : active === 3 ? 4 : null
+    const next: ActiveScenario | null = active === 1 ? 2 : active === 2 ? 3 : null
     if (!next) { setAutoplay(false); return }
     const t = setTimeout(() => {
       setKey(k => k + 1)
@@ -565,8 +579,6 @@ export default function FraudEngineLive() {
     }, 13000)
     return () => clearTimeout(t)
   }, [active, autoplay])
-
-  const allVisited = visited.size === 3
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
@@ -635,28 +647,9 @@ export default function FraudEngineLive() {
                       <div className="text-[10px] text-gray-500">{s.sub}</div>
                     </div>
                   </button>
-                  {i < 2 && <ArrowRight className="w-4 h-4 text-gray-700 shrink-0" />}
                 </div>
               )
             })}
-
-            {/* Show recommendations button after visiting all 3 */}
-            {allVisited && (
-              <>
-                <ArrowRight className="w-4 h-4 text-gray-700 shrink-0" />
-                <button
-                  onClick={() => goTo(4)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-all cursor-pointer ${
-                    active === 4
-                      ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 ring-2 ring-blue-400/50 ring-offset-2 ring-offset-[#0f1117]'
-                      : 'bg-[#161922] border-gray-800 text-gray-500 hover:border-blue-500/30 hover:text-blue-300'
-                  }`}
-                >
-                  <Lightbulb className="w-4 h-4" />
-                  <span className="text-xs font-semibold">AI Insights</span>
-                </button>
-              </>
-            )}
 
             <div className="w-px h-6 bg-gray-800 mx-1" />
             {autoplay && (
@@ -677,36 +670,13 @@ export default function FraudEngineLive() {
         </div>
       )}
 
-      {/* ── Case simulation (one at a time, full width) ── */}
+      {/* ── Case simulation (2-column: analysis left, insights right) ── */}
       {active >= 1 && active <= 3 && (
-        <div key={`${key}-${active}`} className="max-w-2xl mx-auto">
+        <div key={`${key}-${active}`}>
           <CaseSimulation
             fraudCase={CASES[active - 1]}
             playing={true}
           />
-        </div>
-      )}
-
-      {/* ── AI Recommendations ────────────────────── */}
-      {active === 4 && (
-        <div>
-          <div className="flex items-center gap-3 mb-3">
-            <div className="h-px flex-1 bg-gray-800" />
-            <span className="text-xs uppercase tracking-widest text-gray-500 font-semibold flex items-center gap-1.5">
-              <Lightbulb className="w-3.5 h-3.5 text-blue-400" /> AI-Generated Prevention Recommendations
-            </span>
-            <div className="h-px flex-1 bg-gray-800" />
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {CASES.map((fc, i) => (
-              <RecommendationCard
-                key={fc.id}
-                rec={fc.recommendation}
-                visible={true}
-                delay={i * 400}
-              />
-            ))}
-          </div>
         </div>
       )}
     </div>
