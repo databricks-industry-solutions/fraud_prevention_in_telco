@@ -501,20 +501,21 @@ function PipelineDiagram() {
   return (
     <div className="bg-[#161922] border border-gray-800 rounded-lg p-5">
       <div className="flex items-center justify-center gap-3 flex-wrap">
-        {/* 3 parallel data sources */}
+        {/* 3 parallel data sources, each with its own arrow */}
         <div className="flex flex-col gap-1.5">
           {dataSources.map(s => (
-            <div key={s.label} className={`${s.bg} border rounded-lg px-3 py-1.5 flex items-center gap-2 min-w-[140px]`}>
-              <s.icon className={`w-4 h-4 ${s.color} shrink-0`} />
-              <div>
-                <div className={`text-[10px] font-semibold ${s.color}`}>{s.label}</div>
-                <div className="text-[9px] text-gray-500">{s.sub}</div>
+            <div key={s.label} className="flex items-center gap-2">
+              <div className={`${s.bg} border rounded-lg px-3 py-1.5 flex items-center gap-2 min-w-[140px]`}>
+                <s.icon className={`w-4 h-4 ${s.color} shrink-0`} />
+                <div>
+                  <div className={`text-[10px] font-semibold ${s.color}`}>{s.label}</div>
+                  <div className="text-[9px] text-gray-500">{s.sub}</div>
+                </div>
               </div>
+              <ArrowRight className={`w-4 h-4 ${s.color} shrink-0 opacity-60`} />
             </div>
           ))}
         </div>
-
-        <ArrowRight className="w-4 h-4 text-gray-600 shrink-0" />
 
         {/* Engine stages */}
         {engine.map((s, i) => (
