@@ -9,6 +9,7 @@ Pool auto-reconnects on failure and refreshes credentials periodically.
 
 import os
 import time
+import asyncio
 import logging
 import aiohttp
 import asyncpg
@@ -254,26 +255,54 @@ class DeltaWriter:
         host = get_workspace_host()
         token = user_token or get_oauth_token()
         session = await self._get_session()
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
 
         async with session.post(
             f"{host}/api/2.0/sql/statements",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             json={
                 "warehouse_id": WAREHOUSE_ID,
                 "catalog": catalog,
                 "schema": schema,
                 "statement": sql,
-                "wait_timeout": "45s",
+                "wait_timeout": "50s",
             },
         ) as resp:
+            http_status = resp.status
             data = await resp.json()
 
+        if http_status != 200:
+            logger.error(
+                "SQL Statement API POST %s (warehouse=%s catalog=%s): %s",
+                http_status, WAREHOUSE_ID, catalog, str(data)[:800],
+            )
+            raise RuntimeError(f"SQL Statement API HTTP {http_status}: {str(data)[:400]}")
+
         status = data.get("status", {})
-        if status.get("state") != "SUCCEEDED":
-            error_msg = status.get("error", {}).get("message", "Unknown error")
+        state = status.get("state")
+
+        # Poll while the statement is still running. A cold serverless warehouse
+        # can take well over the initial wait window (e.g. ai_forecast), in which
+        # case the first response returns PENDING/RUNNING with a statement_id we
+        # poll until it terminates — rather than treating it as a failure.
+        statement_id = data.get("statement_id")
+        poll_deadline = time.time() + 180  # cap total wait at 3 min
+        while state in ("PENDING", "RUNNING") and statement_id and time.time() < poll_deadline:
+            await asyncio.sleep(2)
+            async with session.get(
+                f"{host}/api/2.0/sql/statements/{statement_id}",
+                headers=headers,
+            ) as poll_resp:
+                data = await poll_resp.json()
+            status = data.get("status", {})
+            state = status.get("state")
+
+        if state != "SUCCEEDED":
+            error_msg = status.get("error", {}).get("message", state or "Unknown error")
+            logger.error("SQL Statement API non-success (state=%s): %s", state, str(data)[:800])
             raise RuntimeError(f"SQL Statement API error: {error_msg}")
 
         columns = [
