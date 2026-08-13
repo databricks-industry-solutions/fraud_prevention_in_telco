@@ -330,7 +330,10 @@ async def _forecast_linreg():
         FROM {PGSCHEMA}.transactions_synced
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND fraud_score::DOUBLE PRECISION < 95
-          AND transaction_date >= CURRENT_DATE - INTERVAL '60 days'
+          AND transaction_date >= (
+              SELECT MAX(transaction_date) FROM {PGSCHEMA}.transactions_synced
+              WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
+          ) - INTERVAL '60 days'
         GROUP BY DATE(transaction_date)
         ORDER BY day
     """)
@@ -419,7 +422,10 @@ async def monthly_trend():
             ROUND(SUM(CASE WHEN review_status = 'pending_review' THEN case_exposure_usd::NUMERIC ELSE 0 END), 2) AS open_exposure
         FROM {PGSCHEMA}.transactions_synced
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
-          AND transaction_date >= CURRENT_DATE - INTERVAL '12 months'
+          AND transaction_date >= (
+              SELECT MAX(transaction_date) FROM {PGSCHEMA}.transactions_synced
+              WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
+          ) - INTERVAL '12 months'
         GROUP BY DATE_TRUNC('month', transaction_date)
         ORDER BY month
     """)
@@ -767,7 +773,10 @@ async def sla_tracking():
             SUM(CASE WHEN review_status IN ('reviewed','escalated') THEN 1 ELSE 0 END) AS resolved
         FROM {PGSCHEMA}.transactions_synced
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
-          AND transaction_date >= CURRENT_DATE - INTERVAL '14 days'
+          AND transaction_date >= (
+              SELECT MAX(transaction_date) FROM {PGSCHEMA}.transactions_synced
+              WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
+          ) - INTERVAL '14 days'
         GROUP BY DATE(transaction_date)
         ORDER BY day
     """)
