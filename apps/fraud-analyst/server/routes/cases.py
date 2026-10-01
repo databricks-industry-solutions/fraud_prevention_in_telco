@@ -15,10 +15,41 @@ from ..models import CaseActionRequest
 
 logger = logging.getLogger(__name__)
 
+# Cache of actual column names for writable Lakebase tables.
+# Populated on first write attempt to avoid inserting into non-existent columns.
+_table_columns_cache: dict = {}
+
+
+async def _get_table_columns(schema: str, table: str) -> set:
+    """Return the set of column names for a Lakebase table.
+
+    Only successful (non-empty) lookups are cached, so a transient introspection
+    error or a not-yet-provisioned table does not poison all future reads/writes
+    with an empty column set until the process restarts.
+    """
+    key = schema + "." + table
+    cached = _table_columns_cache.get(key)
+    if cached:
+        return cached
+    rows = await db.execute(
+        "SELECT column_name FROM information_schema.columns"
+        " WHERE table_schema = $1 AND table_name = $2",
+        schema, table,
+    )
+    cols = {r["column_name"] for r in rows}
+    if cols:
+        _table_columns_cache[key] = cols
+        logger.info("Discovered columns for %s: %s", key, cols)
+    else:
+        logger.warning(
+            "No columns discovered for %s (missing table or failed introspection); not caching", key
+        )
+    return cols
+
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/api/cases", tags=["cases"])
 
-from ..industry_config import DELTA_CATALOG, DELTA_SCHEMA, FLAGGED_THRESHOLD
+from ..industry_config import DELTA_CATALOG, DELTA_SCHEMA, FLAGGED_THRESHOLD, PRIMARY_TABLE, DELTA_TXN_TABLE
 
 
 @router.get("")
@@ -91,7 +122,7 @@ async def list_cases(
 
     offset = (page - 1) * limit
 
-    count_sql = f"SELECT COUNT(*) FROM {PGSCHEMA}.transactions_synced {where_sql}"
+    count_sql = f"SELECT COUNT(*) FROM {PGSCHEMA}.{PRIMARY_TABLE} {where_sql}"
     total = int(await db.fetchval(count_sql, *params) or 0)
 
     query_sql = f"""
@@ -106,7 +137,7 @@ async def list_cases(
             transaction_date,
             transaction_region,
             high_risk_flag
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         {where_sql}
         ORDER BY {order_expr}
         LIMIT ${idx} OFFSET ${idx + 1}
@@ -128,13 +159,13 @@ async def get_filter_options():
     """Get distinct values for filter dropdowns."""
     statuses, regions, types = await asyncio.gather(
         db.execute(
-            f"SELECT DISTINCT review_status FROM {PGSCHEMA}.transactions_synced WHERE review_status IS NOT NULL ORDER BY review_status"
+            f"SELECT DISTINCT review_status FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE review_status IS NOT NULL ORDER BY review_status"
         ),
         db.execute(
-            f"SELECT DISTINCT transaction_region FROM {PGSCHEMA}.transactions_synced WHERE transaction_region IS NOT NULL ORDER BY transaction_region"
+            f"SELECT DISTINCT transaction_region FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE transaction_region IS NOT NULL ORDER BY transaction_region"
         ),
         db.execute(
-            f"SELECT DISTINCT transaction_type FROM {PGSCHEMA}.transactions_synced WHERE transaction_type IS NOT NULL ORDER BY transaction_type"
+            f"SELECT DISTINCT transaction_type FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE transaction_type IS NOT NULL ORDER BY transaction_type"
         ),
     )
     return {
@@ -156,7 +187,7 @@ async def get_case_detail(transaction_id: str = Path(..., max_length=100, patter
                risk_reason_engine, review_status, assigned_analyst, analyst_notes,
                last_review_date, mitigation_steps, fraud_root_cause, case_exposure_usd,
                is_fp, is_fn
-        FROM {PGSCHEMA}.transactions_synced WHERE transaction_id = $1""",
+        FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE transaction_id = $1""",
         transaction_id,
     )
 
@@ -168,7 +199,7 @@ async def get_case_detail(transaction_id: str = Path(..., max_length=100, patter
 
     case = rows[0]
 
-    # Device lookup: transactions_synced uses customer_user_id (USR-XXXXXX-00)
+    # Device lookup: the primary table uses customer_user_id (USR-XXXXXX-00)
     # while device_sdk_synced uses subscriber_device_id (device_XXXXXX).
     # Extract the numeric portion to cross-reference.
     device = None
@@ -210,14 +241,24 @@ async def get_case_detail(transaction_id: str = Path(..., max_length=100, patter
 @router.get("/{transaction_id}/history")
 async def get_decision_history(transaction_id: str = Path(..., max_length=100, pattern=r"^[a-zA-Z0-9_\-]+$")):
     """Get analyst decision history from audit log (full history, not just latest)."""
+    # Dynamically select only columns that exist in the Lakebase table
+    _acols = await _get_table_columns(PGSCHEMA, "decision_audit_log")
+    _want = ["transaction_id", "review_status", "assigned_analyst",
+             "analyst_notes", "mitigation_steps", "is_fp", "is_fn"]
+    _sel = [c for c in _want if c in _acols]
+    if "decision_timestamp" in _acols:
+        _sel.append("decision_timestamp AS last_review_date")
+    if not _sel:
+        # Column introspection unavailable — avoid building `SELECT  FROM ...`.
+        return {"history": []}
+    _sel_str = ", ".join(_sel)
+    _order = "decision_timestamp DESC" if "decision_timestamp" in _acols else "1 DESC"
     rows = await db.execute(
-        f"""SELECT transaction_id, review_status, assigned_analyst,
-               analyst_notes, mitigation_steps, decision_timestamp AS last_review_date,
-               is_fp, is_fn
-        FROM {PGSCHEMA}.decision_audit_log
-        WHERE transaction_id = $1
-        ORDER BY decision_timestamp DESC
-        LIMIT 20""",
+        "SELECT " + _sel_str
+        + " FROM " + PGSCHEMA + ".decision_audit_log"
+        + " WHERE transaction_id = $1"
+        + " ORDER BY " + _order
+        + " LIMIT 20",
         transaction_id,
     )
     return {"history": rows}
@@ -228,7 +269,7 @@ async def get_customer_transaction_history(transaction_id: str = Path(..., max_l
     """Get recent transaction history for the customer who owns this transaction."""
     # First get the account_id for this transaction
     rows = await db.execute(
-        f"SELECT account_id FROM {PGSCHEMA}.transactions_synced WHERE transaction_id = $1",
+        f"SELECT account_id FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE transaction_id = $1",
         transaction_id,
     )
     if not rows or not rows[0].get("account_id"):
@@ -238,7 +279,7 @@ async def get_customer_transaction_history(transaction_id: str = Path(..., max_l
     history = await db.execute(
         f"""SELECT transaction_id, transaction_date, transaction_cost,
                fraud_score, review_status, transaction_type
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE account_id = $1
         ORDER BY transaction_date DESC
         LIMIT 30""",
@@ -258,52 +299,106 @@ async def submit_action(request: Request, transaction_id: str = Path(..., max_le
     """
     decided_at = datetime.now(timezone.utc)
 
-    # Primary write: UPSERT into Lakebase analyst_review (fast, parameterized)
-    upsert_sql = f"""
-        INSERT INTO {PGSCHEMA}.analyst_review
-        (transaction_id, review_status, assigned_analyst, analyst_notes,
-         mitigation_steps, last_review_date, is_fp, is_fn)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (transaction_id) DO UPDATE SET
-            review_status = EXCLUDED.review_status,
-            assigned_analyst = EXCLUDED.assigned_analyst,
-            analyst_notes = EXCLUDED.analyst_notes,
-            mitigation_steps = EXCLUDED.mitigation_steps,
-            last_review_date = EXCLUDED.last_review_date,
-            is_fp = EXCLUDED.is_fp,
-            is_fn = EXCLUDED.is_fn
-    """
+    # Primary write: UPSERT into Lakebase analyst_review (fast, parameterized).
+    # Dynamically discover which columns exist to handle schema mismatches
+    # between the Delta source table and the Lakebase-native writable table.
     is_fp = action.decision == "false_positive"
     is_fn = action.decision == "false_negative"
-    try:
-        await db.execute_write(
-            upsert_sql,
-            transaction_id, action.decision, action.analyst_name,
-            action.notes or "", action.mitigation_action or "",
-            decided_at, is_fp, is_fn,
+
+    # All columns we want to write and their values (order matters for $N params)
+    _all_review_cols = [
+        ("transaction_id", transaction_id),
+        ("review_status", action.decision),
+        ("assigned_analyst", action.analyst_name),
+        ("analyst_notes", action.notes or ""),
+        ("mitigation_steps", action.mitigation_action or ""),
+        ("last_review_date", decided_at),
+        ("is_fp", is_fp),
+        ("is_fn", is_fn),
+    ]
+    _review_cols = await _get_table_columns(PGSCHEMA, "analyst_review")
+    _filtered = [(c, v) for c, v in _all_review_cols if c in _review_cols]
+    if len(_filtered) <= 1:
+        # Only transaction_id (or nothing) resolved — a dynamic write would
+        # produce invalid SQL (empty column list or empty DO UPDATE SET).
+        # Surface the failure instead of silently reporting success.
+        logger.error(
+            "analyst_review columns unavailable (%s); cannot persist decision for %s",
+            _review_cols, transaction_id,
         )
-    except Exception as e:
-        logger.error("Lakebase UPSERT failed for %s: %s (type: %s)", transaction_id, e, type(e).__name__)
+        return JSONResponse(
+            status_code=502,
+            content={"status": "error", "message": "Failed to record decision. Please try again."},
+        )
+    _col_names = ", ".join(c for c, _ in _filtered)
+    _placeholders = ", ".join("$" + str(i + 1) for i in range(len(_filtered)))
+    _update_set = ", ".join(
+        c + " = EXCLUDED." + c for c, _ in _filtered if c != "transaction_id"
+    )
+    _values = [v for _, v in _filtered]
+
+    upsert_sql = (
+        "INSERT INTO " + PGSCHEMA + ".analyst_review"
+        + " (" + _col_names + ")"
+        + " VALUES (" + _placeholders + ")"
+        + " ON CONFLICT (transaction_id) DO UPDATE SET " + _update_set
+    )
+    _lakebase_ok = False
+    try:
+        await db.execute_write(upsert_sql, *_values)
+        _lakebase_ok = True
+    except Exception as _upsert_err:
+        # ON CONFLICT may fail if table lacks a unique constraint; try plain INSERT
+        logger.warning("UPSERT failed, trying INSERT: %s", _upsert_err)
+        try:
+            await db.execute_write(
+                "INSERT INTO " + PGSCHEMA + ".analyst_review"
+                + " (" + _col_names + ")"
+                + " VALUES (" + _placeholders + ")",
+                *_values,
+            )
+            _lakebase_ok = True
+        except Exception as _ins_err:
+            logger.warning("Lakebase INSERT also failed: %s", _ins_err)
+
+    # The analyst UI reads decisions back from Lakebase analyst_review, so if the
+    # primary write failed the decision is effectively lost — surface a 502
+    # rather than returning {"status": "ok"} (which would silently drop the write).
+    if not _lakebase_ok:
+        logger.error("Lakebase analyst_review write failed for %s; decision not persisted", transaction_id)
         return JSONResponse(
             status_code=502,
             content={"status": "error", "message": "Failed to record decision. Please try again."},
         )
 
     # Append to audit log (full decision history, not just latest)
+    _all_audit_cols = [
+        ("transaction_id", transaction_id),
+        ("review_status", action.decision),
+        ("assigned_analyst", action.analyst_name),
+        ("analyst_notes", action.notes or ""),
+        ("mitigation_steps", action.mitigation_action or ""),
+        ("decision_timestamp", decided_at),
+        ("is_fp", is_fp),
+        ("is_fn", is_fn),
+    ]
+    _audit_cols = await _get_table_columns(PGSCHEMA, "decision_audit_log")
+    _afilt = [(c, v) for c, v in _all_audit_cols if c in _audit_cols]
+    _acol_names = ", ".join(c for c, _ in _afilt)
+    _aplaceholders = ", ".join("$" + str(i + 1) for i in range(len(_afilt)))
+    _avalues = [v for _, v in _afilt]
+
     try:
         await db.execute_write(
-            f"""INSERT INTO {PGSCHEMA}.decision_audit_log
-            (transaction_id, review_status, assigned_analyst, analyst_notes,
-             mitigation_steps, decision_timestamp, is_fp, is_fn)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)""",
-            transaction_id, action.decision, action.analyst_name,
-            action.notes or "", action.mitigation_action or "",
-            decided_at, is_fp, is_fn,
+            "INSERT INTO " + PGSCHEMA + ".decision_audit_log"
+            + " (" + _acol_names + ")"
+            + " VALUES (" + _aplaceholders + ")",
+            *_avalues,
         )
     except Exception as e:
         logger.warning("Audit log insert failed for %s: %s", transaction_id, e)
 
-    # Delta write-back (transactions_synced is read-only; updates go to Delta
+    # Delta write-back (the Lakebase synced table is read-only; updates go to Delta
     # and propagate back via CDF sync).
     #
     # SQL Statement API does not support parameterised queries, so we
@@ -348,14 +443,14 @@ async def submit_action(request: Request, transaction_id: str = Path(..., max_le
 
     try:
         await delta.execute(
-            f"""UPDATE {DELTA_CATALOG}.{DELTA_SCHEMA}.transaction_risk
+            f"""UPDATE {DELTA_CATALOG}.{DELTA_SCHEMA}.{DELTA_TXN_TABLE}
                 SET review_status = '{esc_decision}',
                     assigned_analyst = '{esc_analyst}'
                 WHERE transaction_id = '{esc_txn}'""",
             catalog=DELTA_CATALOG, schema=DELTA_SCHEMA,
         )
     except Exception:
-        logger.warning("Delta transaction_risk write-back failed for %s", transaction_id)
+        logger.warning("Delta transactions write-back failed for %s", transaction_id)
 
     logger.info(
         "AUDIT: decision=%s analyst=%s txn=%s",

@@ -29,8 +29,8 @@ import logging
 import os
 
 from server.config import get_workspace_host
-from server.db import db, PGSCHEMA
-from server.industry_config import APP_TITLE
+from server.db import db, PGSCHEMA, ensure_lakebase_postgres
+from server.industry_config import APP_TITLE, PRIMARY_TABLE
 from server.routes.cases import router as cases_router
 from server.routes.dashboard import router as dashboard_router
 from server.routes.executive import router as executive_router
@@ -40,6 +40,14 @@ from server.routes.chat import router as chat_router
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Startup / shutdown lifecycle hook."""
+    # Bootstrap Lakebase on startup so deployments don't require a manually
+    # pre-created Lakebase instance. Opt-in: only runs when LAKEBASE_PROJECT_ID
+    # (or a projects/... LAKEBASE_INSTANCE) is set — otherwise it's a no-op and
+    # the app uses the manually provisioned instance. Non-fatal on failure.
+    try:
+        await ensure_lakebase_postgres()
+    except Exception as e:
+        logger.error("Lakebase bootstrap failed (non-fatal): %s", e)
     yield
     # Graceful shutdown: close asyncpg pool and aiohttp sessions
     if db._pool:
@@ -83,7 +91,7 @@ async def health():
     """Verify Lakebase connectivity and return table stats."""
     try:
         await db.fetchval(
-            f"SELECT 1 FROM {PGSCHEMA}.transactions_synced LIMIT 1"
+            f"SELECT 1 FROM {PGSCHEMA}.{PRIMARY_TABLE} LIMIT 1"
         )
         return {"status": "ok"}
     except Exception as e:

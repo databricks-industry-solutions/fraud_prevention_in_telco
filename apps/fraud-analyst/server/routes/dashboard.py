@@ -10,7 +10,7 @@ from fastapi import APIRouter, Path, Request
 
 from ..db import db, delta, PGSCHEMA
 from ..industry_config import (
-    DELTA_CATALOG, DELTA_SCHEMA,
+    DELTA_CATALOG, DELTA_SCHEMA, PRIMARY_TABLE,
     FLAGGED_THRESHOLD, HIGH_RISK_THRESHOLD,
     MITIGATION_STEPS, MITIGATION_SHORT_LABELS,
 )
@@ -56,7 +56,7 @@ async def pipeline_summary(period: str = "month"):
     rows = await db.execute(f"""
         WITH latest AS (
             SELECT DATE_TRUNC('{trunc}', MAX(transaction_date)) AS ref_month
-            FROM {PGSCHEMA}.transactions_synced
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
         ),
         current_period AS (
@@ -77,7 +77,7 @@ async def pipeline_summary(period: str = "month"):
                 ROUND(SUM(case_exposure_usd::NUMERIC), 2) AS total_exposure,
                 ROUND(SUM(CASE WHEN review_status = 'pending_review' THEN case_exposure_usd::NUMERIC ELSE 0 END), 2) AS open_exposure,
                 ROUND(AVG(case_exposure_usd::NUMERIC), 2) AS avg_exposure
-            FROM {PGSCHEMA}.transactions_synced, latest
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
               AND transaction_date >= latest.ref_month
         ),
@@ -91,7 +91,7 @@ async def pipeline_summary(period: str = "month"):
                 ROUND(100.0 * SUM(CASE WHEN review_status = 'escalated' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN review_status IN ('reviewed','escalated') THEN 1 ELSE 0 END), 0), 1) AS escalation_rate,
                 ROUND(SUM(case_exposure_usd::NUMERIC), 2) AS total_exposure,
                 ROUND(SUM(CASE WHEN review_status = 'pending_review' THEN case_exposure_usd::NUMERIC ELSE 0 END), 2) AS open_exposure
-            FROM {PGSCHEMA}.transactions_synced, latest
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
               AND transaction_date >= latest.ref_month - INTERVAL '{prior_iv}'
               AND transaction_date < latest.ref_month
@@ -104,7 +104,7 @@ async def pipeline_summary(period: str = "month"):
                 ROUND(100.0 * SUM(CASE WHEN review_status IN ('reviewed','escalated') THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS resolution_rate,
                 ROUND(100.0 * SUM(CASE WHEN review_status = 'escalated' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN review_status IN ('reviewed','escalated') THEN 1 ELSE 0 END), 0), 1) AS escalation_rate,
                 ROUND(SUM(case_exposure_usd::NUMERIC), 2) AS total_exposure
-            FROM {PGSCHEMA}.transactions_synced, latest
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
               AND transaction_date >= latest.ref_month - INTERVAL '{prior_q_iv}'
               AND transaction_date < latest.ref_month
@@ -117,7 +117,7 @@ async def pipeline_summary(period: str = "month"):
                 ROUND(100.0 * SUM(CASE WHEN review_status IN ('reviewed','escalated') THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS resolution_rate,
                 ROUND(100.0 * SUM(CASE WHEN review_status = 'escalated' THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN review_status IN ('reviewed','escalated') THEN 1 ELSE 0 END), 0), 1) AS escalation_rate,
                 ROUND(SUM(case_exposure_usd::NUMERIC), 2) AS total_exposure
-            FROM {PGSCHEMA}.transactions_synced, latest
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
               AND transaction_date >= latest.ref_month - INTERVAL '{prior_y_iv}'
               AND transaction_date < latest.ref_month - INTERVAL '{prior_y_iv}' + INTERVAL '{cur_iv}'
@@ -140,7 +140,7 @@ async def pipeline_summary(period: str = "month"):
         SELECT
             TO_CHAR(DATE_TRUNC('{trunc}', MAX(transaction_date)), 'YYYY-MM-DD') AS ref_date,
             TO_CHAR(MAX(transaction_date), 'YYYY-MM-DD') AS latest_date
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
     """)
     result["ref_month"] = ref_rows[0]["ref_date"] if ref_rows else None
@@ -170,7 +170,7 @@ async def engine_performance(period: str = "month"):
     rows = await db.execute(f"""
         WITH latest AS (
             SELECT DATE_TRUNC('{trunc}', MAX(transaction_date)) AS ref_start
-            FROM {PGSCHEMA}.transactions_synced
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}
         )
         SELECT
             'current' AS period,
@@ -186,7 +186,7 @@ async def engine_performance(period: str = "month"):
             ROUND(SUM(CASE WHEN is_fn = TRUE THEN case_exposure_usd::NUMERIC ELSE 0 END), 2) AS lost_by_fn,
             COUNT(*) AS total_flagged,
             ROUND(SUM(case_exposure_usd::NUMERIC), 2) AS total_exposure
-        FROM {PGSCHEMA}.transactions_synced, latest
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND transaction_date >= latest.ref_start
 
@@ -206,7 +206,7 @@ async def engine_performance(period: str = "month"):
             ROUND(SUM(CASE WHEN is_fn = TRUE THEN case_exposure_usd::NUMERIC ELSE 0 END), 2),
             COUNT(*),
             ROUND(SUM(case_exposure_usd::NUMERIC), 2)
-        FROM {PGSCHEMA}.transactions_synced, latest
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND transaction_date >= latest.ref_start - INTERVAL '{prior_iv}'
           AND transaction_date < latest.ref_start
@@ -327,11 +327,11 @@ async def _forecast_linreg():
             DATE(transaction_date) AS day,
             COUNT(*) AS case_count,
             ROUND(SUM(case_exposure_usd::NUMERIC), 2) AS exposure
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND fraud_score::DOUBLE PRECISION < 95
           AND transaction_date >= (
-              SELECT MAX(transaction_date) FROM {PGSCHEMA}.transactions_synced
+              SELECT MAX(transaction_date) FROM {PGSCHEMA}.{PRIMARY_TABLE}
               WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           ) - INTERVAL '60 days'
         GROUP BY DATE(transaction_date)
@@ -420,10 +420,10 @@ async def monthly_trend():
             ) AS resolution_rate,
             ROUND(SUM(case_exposure_usd::NUMERIC), 2) AS total_exposure,
             ROUND(SUM(CASE WHEN review_status = 'pending_review' THEN case_exposure_usd::NUMERIC ELSE 0 END), 2) AS open_exposure
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND transaction_date >= (
-              SELECT MAX(transaction_date) FROM {PGSCHEMA}.transactions_synced
+              SELECT MAX(transaction_date) FROM {PGSCHEMA}.{PRIMARY_TABLE}
               WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           ) - INTERVAL '12 months'
         GROUP BY DATE_TRUNC('month', transaction_date)
@@ -467,7 +467,7 @@ async def environmental_factors():
                 100.0 * SUM(CASE WHEN fraud_score::DOUBLE PRECISION >= 90 THEN 1 ELSE 0 END)
                 / NULLIF(COUNT(*), 0), 1
             ) AS critical_pct
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
         GROUP BY TO_CHAR(transaction_date, 'Dy'), EXTRACT(DOW FROM transaction_date)
         ORDER BY day_num
@@ -485,7 +485,7 @@ async def environmental_factors():
                 100.0 * SUM(CASE WHEN review_status = 'escalated' THEN 1 ELSE 0 END)
                 / NULLIF(COUNT(*), 0), 1
             ) AS escalation_rate
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
         GROUP BY transaction_type
         ORDER BY total_exposure DESC
@@ -502,7 +502,7 @@ async def environmental_factors():
                 100.0 * SUM(CASE WHEN review_status = 'escalated' THEN 1 ELSE 0 END)
                 / NULLIF(COUNT(*), 0), 1
             ) AS escalation_rate
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND risk_reason_engine IS NOT NULL AND risk_reason_engine != ''
         GROUP BY risk_reason_engine
@@ -522,7 +522,7 @@ async def environmental_factors():
                 100.0 * SUM(CASE WHEN review_status = 'escalated' THEN 1 ELSE 0 END)
                 / NULLIF(COUNT(*), 0), 1
             ) AS escalation_rate
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
         GROUP BY transaction_region
         ORDER BY total_exposure DESC
@@ -609,7 +609,7 @@ async def mitigation_effectiveness():
             SUM(CASE WHEN ar.is_fp THEN 1 ELSE 0 END) AS false_positives,
             SUM(CASE WHEN ar.is_fn THEN 1 ELSE 0 END) AS false_negatives
         FROM {PGSCHEMA}.analyst_review ar
-        JOIN {PGSCHEMA}.transactions_synced t ON ar.transaction_id = t.transaction_id
+        JOIN {PGSCHEMA}.{PRIMARY_TABLE} t ON ar.transaction_id = t.transaction_id
         WHERE t.fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND ar.mitigation_steps IS NOT NULL AND ar.mitigation_steps != ''
           AND ar.mitigation_steps IN (
@@ -661,7 +661,7 @@ async def team_performance(period: str = "month"):
     rows = await db.execute(f"""
         WITH latest AS (
             SELECT DATE_TRUNC('{trunc}', MAX(transaction_date)) AS ref_month
-            FROM {PGSCHEMA}.transactions_synced
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
         )
         SELECT
@@ -675,7 +675,7 @@ async def team_performance(period: str = "month"):
             ROUND(SUM(case_exposure_usd::NUMERIC), 2) AS total_exposure,
             ROUND(SUM(CASE WHEN review_status = 'reviewed' THEN case_exposure_usd::NUMERIC ELSE 0 END), 2) AS exposure_resolved,
             ROUND(SUM(CASE WHEN review_status = 'escalated' THEN case_exposure_usd::NUMERIC ELSE 0 END), 2) AS exposure_escalated
-        FROM {PGSCHEMA}.transactions_synced, latest
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND fraud_score::DOUBLE PRECISION < 95
           AND transaction_date >= latest.ref_month
@@ -721,7 +721,7 @@ async def sla_tracking():
         WITH latest AS (
             SELECT DATE_TRUNC('month', MAX(transaction_date)) AS ref,
                    MAX(transaction_date) AS max_date
-            FROM {PGSCHEMA}.transactions_synced
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
         )
         SELECT
@@ -744,7 +744,7 @@ async def sla_tracking():
                 CASE WHEN review_status = 'pending_review'
                      THEN case_exposure_usd::NUMERIC ELSE 0 END
             ), 2) AS total_pending_exposure
-        FROM {PGSCHEMA}.transactions_synced, latest
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND transaction_date >= latest.ref
     """)
@@ -758,7 +758,7 @@ async def sla_tracking():
                 EXTRACT(EPOCH FROM (d.decision_timestamp - t.transaction_date)) / 3600.0
             )::NUMERIC, 1) AS avg_resolution_hours
         FROM {PGSCHEMA}.decision_audit_log d
-        JOIN {PGSCHEMA}.transactions_synced t ON d.transaction_id = t.transaction_id
+        JOIN {PGSCHEMA}.{PRIMARY_TABLE} t ON d.transaction_id = t.transaction_id
         WHERE t.review_status IN ('reviewed', 'escalated')
     """)
 
@@ -771,10 +771,10 @@ async def sla_tracking():
         SELECT DATE(transaction_date) AS day,
             COUNT(*) AS new_cases,
             SUM(CASE WHEN review_status IN ('reviewed','escalated') THEN 1 ELSE 0 END) AS resolved
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND transaction_date >= (
-              SELECT MAX(transaction_date) FROM {PGSCHEMA}.transactions_synced
+              SELECT MAX(transaction_date) FROM {PGSCHEMA}.{PRIMARY_TABLE}
               WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           ) - INTERVAL '14 days'
         GROUP BY DATE(transaction_date)
@@ -814,13 +814,13 @@ async def similar_cases(
         WITH target AS (
             SELECT risk_reason_engine, transaction_region, transaction_type,
                    fraud_score::DOUBLE PRECISION AS score
-            FROM {PGSCHEMA}.transactions_synced
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}
             WHERE transaction_id = $1
         )
         SELECT t.transaction_id, t.customer_name, t.fraud_score,
                t.case_exposure_usd, t.review_status, t.risk_reason_engine,
                t.assigned_analyst, t.mitigation_steps
-        FROM {PGSCHEMA}.transactions_synced t, target tgt
+        FROM {PGSCHEMA}.{PRIMARY_TABLE} t, target tgt
         WHERE t.transaction_id != $1
           AND t.risk_reason_engine = tgt.risk_reason_engine
           AND t.fraud_score::DOUBLE PRECISION BETWEEN tgt.score - 10 AND tgt.score + 10
@@ -849,11 +849,11 @@ async def similar_cases(
         WITH target AS (
             SELECT risk_reason_engine,
                    fraud_score::DOUBLE PRECISION AS score
-            FROM {PGSCHEMA}.transactions_synced
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}
             WHERE transaction_id = $1
         )
         SELECT review_status, COUNT(*) AS cnt
-        FROM {PGSCHEMA}.transactions_synced t, target tgt
+        FROM {PGSCHEMA}.{PRIMARY_TABLE} t, target tgt
         WHERE t.risk_reason_engine = tgt.risk_reason_engine
           AND t.fraud_score::DOUBLE PRECISION BETWEEN tgt.score - 10 AND tgt.score + 10
           AND t.review_status IN ('reviewed', 'escalated')
@@ -892,7 +892,7 @@ async def alerts():
         WITH latest AS (
             SELECT DATE_TRUNC('month', MAX(transaction_date)) AS ref,
                    MAX(transaction_date) AS max_date
-            FROM {PGSCHEMA}.transactions_synced
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
         )
         SELECT
@@ -908,7 +908,7 @@ async def alerts():
                 / NULLIF(COUNT(*) FILTER (WHERE risk_status_engine = 'blocked'), 0),
                 1
             ) AS fp_rate
-        FROM {PGSCHEMA}.transactions_synced, latest
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND transaction_date >= latest.ref
     """)
@@ -922,12 +922,12 @@ async def alerts():
     high_exp_rows = await db.execute(f"""
         WITH latest AS (
             SELECT DATE_TRUNC('month', MAX(transaction_date)) AS ref
-            FROM {PGSCHEMA}.transactions_synced
+            FROM {PGSCHEMA}.{PRIMARY_TABLE}
             WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
         )
         SELECT transaction_id, customer_name, assigned_analyst,
                fraud_score, case_exposure_usd
-        FROM {PGSCHEMA}.transactions_synced, latest
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}, latest
         WHERE fraud_score::DOUBLE PRECISION >= {FLAGGED_THRESHOLD}
           AND transaction_date >= latest.ref
           AND review_status = 'pending_review'

@@ -2,6 +2,7 @@
 
 import logging
 from ..db import db, PGSCHEMA
+from ..industry_config import PRIMARY_TABLE
 
 logger = logging.getLogger(__name__)
 
@@ -10,7 +11,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "get_transaction_details",
-            "description": "Get full details for a specific transaction by ID. Returns all fields from the transaction_risk table.",
+            "description": "Get full details for a specific transaction by ID. Returns all fields from the primary transactions table.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -93,7 +94,7 @@ async def get_transaction_details(transaction_id: str) -> str:
                risk_reason_engine, review_status, assigned_analyst, analyst_notes,
                last_review_date, mitigation_steps, fraud_root_cause, case_exposure_usd,
                is_fp, is_fn
-        FROM {PGSCHEMA}.transactions_synced WHERE transaction_id = $1""",
+        FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE transaction_id = $1""",
         transaction_id,
     )
     if not rows:
@@ -121,7 +122,7 @@ async def get_customer_history(account_id: str) -> str:
     rows = await db.execute(
         f"""SELECT transaction_id, transaction_date, transaction_type, transaction_cost,
                fraud_score, risk_status_engine, review_status, transaction_region
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE account_id = $1
         ORDER BY transaction_date DESC
         LIMIT 20""",
@@ -165,7 +166,7 @@ async def search_similar_cases(risk_reason: str = "", region: str = "",
     rows = await db.execute(
         f"""SELECT transaction_id, customer_name, fraud_score, risk_reason_engine,
                transaction_region, review_status, case_exposure_usd
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         {where_sql}
         ORDER BY fraud_score::DOUBLE PRECISION DESC
         LIMIT ${idx}""",
@@ -187,7 +188,7 @@ async def get_region_stats(region: str) -> str:
             SUM(CASE WHEN fraud_label_engine = '1' THEN 1 ELSE 0 END) as fraud_count,
             ROUND(SUM(case_exposure_usd::NUMERIC), 2) as total_exposure,
             SUM(CASE WHEN review_status = 'pending_review' THEN 1 ELSE 0 END) as pending
-        FROM {PGSCHEMA}.transactions_synced
+        FROM {PGSCHEMA}.{PRIMARY_TABLE}
         WHERE transaction_region = $1""",
         region,
     )
