@@ -3,7 +3,13 @@ INDUSTRY CONFIGURATION — Default: Telecom Fraud Ops
 
 Swap out this file to retarget the app for a different industry.
 See README.md for prerequisites and step-by-step setup instructions.
+
+Data-location values (catalog/schema/table names) and the AI endpoint IDs can
+be overridden per deployment via environment variables in app.yaml, so the same
+committed file can be deployed to any workspace without editing it.
 """
+
+import os
 
 # ── App Title (shown in browser tab via /api/config) ─────────────────────────
 
@@ -17,16 +23,22 @@ KA_ENDPOINT_DEFAULT = "<your-ka-endpoint-name>"                # Analyst view: C
 SERVING_ENDPOINT_DEFAULT = "databricks-claude-sonnet-4-5"      # Analyst view: AI case investigation agent
 
 # ── Data Location ────────────────────────────────────────────────────────────
+# All overridable via env (set in app.yaml) so one committed file deploys anywhere.
 
-DELTA_CATALOG = "telecommunications"
-DELTA_SCHEMA = "fraud_data"
+DELTA_CATALOG = os.environ.get("DELTA_CATALOG", "telecommunications")
+DELTA_SCHEMA = os.environ.get("DELTA_SCHEMA", "fraud_data")
 
 # Lakebase table names (as they appear in Postgres after sync)
-PRIMARY_TABLE = "transactions_synced"       # Main case table (synced from Delta)
-DEVICE_TABLE = "device_sdk_synced"          # Detail profile table (synced from Delta)
+PRIMARY_TABLE = os.environ.get("PRIMARY_TABLE", "transactions_synced")   # Main case table (synced from Delta)
+DEVICE_TABLE = os.environ.get("DEVICE_TABLE", "device_sdk_synced")       # Detail profile table (synced from Delta)
 REVIEW_TABLE = "analyst_review"             # Analyst decisions (writable, Lakebase-native)
 AUDIT_TABLE = "decision_audit_log"          # Decision history (writable, Lakebase-native)
 TARGETS_TABLE = "monthly_targets"           # Regional performance targets (writable)
+
+# Delta-side table that case-decision status is written back to. Defaults to a
+# dedicated risk table; set DELTA_TXN_TABLE to the main transactions table if
+# decisions should write straight back to it.
+DELTA_TXN_TABLE = os.environ.get("DELTA_TXN_TABLE", "transaction_risk")
 
 # ── Score Thresholds ─────────────────────────────────────────────────────────
 # Cases with score >= FLAGGED are shown in all views.

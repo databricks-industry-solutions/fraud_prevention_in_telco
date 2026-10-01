@@ -15,7 +15,7 @@ from ..db import db, PGSCHEMA
 import os
 import aiohttp
 
-from ..industry_config import KA_ENDPOINT_DEFAULT
+from ..industry_config import KA_ENDPOINT_DEFAULT, PRIMARY_TABLE
 KA_ENDPOINT = os.environ.get("KA_ENDPOINT", KA_ENDPOINT_DEFAULT)
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ async def chat(request: Request, req: ChatRequest):
                risk_reason_engine, review_status, assigned_analyst, analyst_notes,
                last_review_date, mitigation_steps, fraud_root_cause, case_exposure_usd,
                is_fp, is_fn
-        FROM {PGSCHEMA}.transactions_synced WHERE transaction_id = $1""",
+        FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE transaction_id = $1""",
             req.transaction_id,
         )
         if rows:
@@ -87,7 +87,7 @@ async def chat_stream(request: Request, req: ChatRequest):
                risk_reason_engine, review_status, assigned_analyst, analyst_notes,
                last_review_date, mitigation_steps, fraud_root_cause, case_exposure_usd,
                is_fp, is_fn
-        FROM {PGSCHEMA}.transactions_synced WHERE transaction_id = $1""",
+        FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE transaction_id = $1""",
             req.transaction_id,
         )
         if rows:
@@ -129,7 +129,7 @@ async def chat_ka(request: Request, req: ChatRequest):
             f"""SELECT transaction_id, customer_name, fraud_score, case_exposure_usd,
                    risk_reason_engine, review_status, transaction_region, transaction_type,
                    mitigation_steps, assigned_analyst
-            FROM {PGSCHEMA}.transactions_synced WHERE transaction_id = $1""",
+            FROM {PGSCHEMA}.{PRIMARY_TABLE} WHERE transaction_id = $1""",
             req.transaction_id,
         )
         if rows:

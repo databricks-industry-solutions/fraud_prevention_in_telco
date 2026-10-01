@@ -10,29 +10,82 @@ command:
 
 # Fill in your values before deploying. See README.md.
 env:
-  - name: PGHOST
-    value: "<your-lakebase-instance>.database.cloud.databricks.com"
+  # ── Postgres / Lakebase connection ─────────────────────────────────────────
   - name: PGDATABASE
     value: "databricks_postgres"
   - name: PGSCHEMA
     value: "fraud_data"
   - name: PGPORT
     value: "5432"
+  # Service principal application id. With the Credential API auth path the
+  # username is derived from the token, so this can be left blank in that mode.
   - name: PGUSER
     value: "<your-app-service-principal-application-id>"
+
+  # Lakebase has two deployment modes — pick ONE:
+  #
+  # Mode A (default) — connect to a Lakebase instance you created yourself.
+  #   Set PGHOST + LAKEBASE_INSTANCE. Authenticate either with a secret-scope
+  #   password (PGPASSWORD_SECRET_SCOPE/KEY) or, if left blank, the Lakebase
+  #   Database Credential API (no password management).
+  - name: PGHOST
+    value: "<your-lakebase-instance>.database.cloud.databricks.com"
   - name: LAKEBASE_INSTANCE
     value: "<your-lakebase-instance-name>"
   - name: PGPASSWORD_SECRET_SCOPE
-    value: "<your-secret-scope>"
+    value: ""
   - name: PGPASSWORD_SECRET_KEY
-    value: "<your-secret-key>"
+    value: ""
+  #
+  # Mode B (opt-in) — let the app auto-provision an autoscaling Lakebase
+  #   project/branch/endpoint on startup. Leave PGHOST/LAKEBASE_INSTANCE blank
+  #   and set LAKEBASE_PROJECT_ID. Requires databricks-sdk>=0.79.0.
+  # - name: LAKEBASE_PROJECT_ID
+  #   value: "<your-lakebase-project-id>"
+  # - name: LAKEBASE_BRANCH_ID
+  #   value: "production"
+  # - name: LAKEBASE_ENDPOINT_ID
+  #   value: "primary"
+  # - name: LAKEBASE_PG_VERSION
+  #   value: "17"
+  # - name: LAKEBASE_AUTOSCALING_MIN_CU
+  #   value: "2"
+  # - name: LAKEBASE_AUTOSCALING_MAX_CU
+  #   value: "4"
+
+  # ── Delta write-back + AI endpoints ────────────────────────────────────────
   - name: WAREHOUSE_ID
     value: "<your-warehouse-id>"
   - name: SERVING_ENDPOINT
     value: "databricks-claude-sonnet-4-5"
+
+  # ── Optional data-location overrides ───────────────────────────────────────
+  # These default to the values in server/industry_config.py; override here to
+  # retarget the app to a different catalog/schema/table without editing code.
+  # - name: DELTA_CATALOG
+  #   value: "<your-catalog>"
+  # - name: DELTA_SCHEMA
+  #   value: "fraud_data"
+  # - name: PRIMARY_TABLE
+  #   value: "transactions_synced"
+  # - name: DEVICE_TABLE
+  #   value: "device_sdk_synced"
+  # - name: DELTA_TXN_TABLE
+  #   value: "transaction_risk"
+  # - name: GENIE_SPACE_ID
+  #   value: "<your-genie-space-id>"
+  # - name: KA_ENDPOINT
+  #   value: "<your-ka-endpoint-name>"
 
 resources:
   - name: sql-warehouse
     sql_warehouse:
       id: "<your-warehouse-id>"
       permission: CAN_USE
+  # Optional: bind a provisioned Lakebase instance as an app resource instead of
+  # connecting by host. The instance name is then read from LAKEBASE_DB_INSTANCE_NAME.
+  # - name: database
+  #   database:
+  #     database_name: "databricks_postgres"
+  #     instance_name: "<your-lakebase-instance-name>"
+  #     permission: CAN_CONNECT_AND_CREATE
