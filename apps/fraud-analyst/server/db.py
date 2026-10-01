@@ -161,8 +161,13 @@ def _ensure_lakebase_sync(endpoint_resource_name: str) -> tuple[str, str]:
         time.sleep(2)
 
     endpoint_host = None
-    if getattr(endpoint, "status", None) and getattr(endpoint.status, "hosts", None):
-        endpoint_host = endpoint.status.hosts.host
+    hosts = getattr(getattr(endpoint, "status", None), "hosts", None)
+    if hosts is not None:
+        # `hosts` may be a single host object or a list of them depending on SDK version.
+        if isinstance(hosts, (list, tuple)):
+            endpoint_host = getattr(hosts[0], "host", None) if hosts else None
+        else:
+            endpoint_host = getattr(hosts, "host", None)
     if not endpoint_host:
         raise RuntimeError(f"Lakebase endpoint host not found for {endpoint_resource_name}")
 
@@ -330,13 +335,19 @@ class LakebasePool:
             #    Preferred when you manage the Lakebase password yourself.
             secret_scope = os.environ.get("PGPASSWORD_SECRET_SCOPE", "")
             secret_key = os.environ.get("PGPASSWORD_SECRET_KEY", "")
-            if secret_scope and secret_key and user:
-                try:
-                    password = _fetch_secret(secret_scope, secret_key)
-                    logger.info("Using secret scope for Lakebase auth (user=%s)", user)
-                    return user, password
-                except Exception as e:
-                    logger.warning("Secret scope auth failed (%s), trying credential API", e)
+            if secret_scope and secret_key:
+                if user:
+                    try:
+                        password = _fetch_secret(secret_scope, secret_key)
+                        logger.info("Using secret scope for Lakebase auth (user=%s)", user)
+                        return user, password
+                    except Exception as e:
+                        logger.warning("Secret scope auth failed (%s), trying credential API", e)
+                else:
+                    logger.warning(
+                        "PGPASSWORD_SECRET_SCOPE/KEY set but PGUSER is empty; "
+                        "skipping secret-scope auth and using the Credential API"
+                    )
 
             # 2. PGPASSWORD env var (mainly for local/testing).
             pg_password = os.environ.get("PGPASSWORD", "")
@@ -348,7 +359,12 @@ class LakebasePool:
             #    The returned token is the password AND carries the Postgres
             #    username in its `sub` claim, so PGUSER need not be set manually.
             session = await self._get_http()
-            password = await _fetch_pg_password_async(session)
+            try:
+                password = await _fetch_pg_password_async(session)
+            except Exception as e:
+                # Last-ditch: SP OAuth token as the PG password (legacy path).
+                logger.warning("Credential API failed (%s); falling back to SP OAuth token", e)
+                password = get_oauth_token()
             try:
                 import base64
                 import json

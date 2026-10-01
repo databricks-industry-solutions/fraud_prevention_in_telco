@@ -21,17 +21,30 @@ _table_columns_cache: dict = {}
 
 
 async def _get_table_columns(schema: str, table: str) -> set:
-    """Return the set of column names for a Lakebase table."""
+    """Return the set of column names for a Lakebase table.
+
+    Only successful (non-empty) lookups are cached, so a transient introspection
+    error or a not-yet-provisioned table does not poison all future reads/writes
+    with an empty column set until the process restarts.
+    """
     key = schema + "." + table
-    if key not in _table_columns_cache:
-        rows = await db.execute(
-            "SELECT column_name FROM information_schema.columns"
-            " WHERE table_schema = $1 AND table_name = $2",
-            schema, table,
+    cached = _table_columns_cache.get(key)
+    if cached:
+        return cached
+    rows = await db.execute(
+        "SELECT column_name FROM information_schema.columns"
+        " WHERE table_schema = $1 AND table_name = $2",
+        schema, table,
+    )
+    cols = {r["column_name"] for r in rows}
+    if cols:
+        _table_columns_cache[key] = cols
+        logger.info("Discovered columns for %s: %s", key, cols)
+    else:
+        logger.warning(
+            "No columns discovered for %s (missing table or failed introspection); not caching", key
         )
-        _table_columns_cache[key] = {r["column_name"] for r in rows}
-        logger.info("Discovered columns for %s: %s", key, _table_columns_cache[key])
-    return _table_columns_cache[key]
+    return cols
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/api/cases", tags=["cases"])
@@ -235,6 +248,9 @@ async def get_decision_history(transaction_id: str = Path(..., max_length=100, p
     _sel = [c for c in _want if c in _acols]
     if "decision_timestamp" in _acols:
         _sel.append("decision_timestamp AS last_review_date")
+    if not _sel:
+        # Column introspection unavailable — avoid building `SELECT  FROM ...`.
+        return {"history": []}
     _sel_str = ", ".join(_sel)
     _order = "decision_timestamp DESC" if "decision_timestamp" in _acols else "1 DESC"
     rows = await db.execute(
@@ -302,6 +318,18 @@ async def submit_action(request: Request, transaction_id: str = Path(..., max_le
     ]
     _review_cols = await _get_table_columns(PGSCHEMA, "analyst_review")
     _filtered = [(c, v) for c, v in _all_review_cols if c in _review_cols]
+    if len(_filtered) <= 1:
+        # Only transaction_id (or nothing) resolved — a dynamic write would
+        # produce invalid SQL (empty column list or empty DO UPDATE SET).
+        # Surface the failure instead of silently reporting success.
+        logger.error(
+            "analyst_review columns unavailable (%s); cannot persist decision for %s",
+            _review_cols, transaction_id,
+        )
+        return JSONResponse(
+            status_code=502,
+            content={"status": "error", "message": "Failed to record decision. Please try again."},
+        )
     _col_names = ", ".join(c for c, _ in _filtered)
     _placeholders = ", ".join("$" + str(i + 1) for i in range(len(_filtered)))
     _update_set = ", ".join(
@@ -332,6 +360,16 @@ async def submit_action(request: Request, transaction_id: str = Path(..., max_le
             _lakebase_ok = True
         except Exception as _ins_err:
             logger.warning("Lakebase INSERT also failed: %s", _ins_err)
+
+    # The analyst UI reads decisions back from Lakebase analyst_review, so if the
+    # primary write failed the decision is effectively lost — surface a 502
+    # rather than returning {"status": "ok"} (which would silently drop the write).
+    if not _lakebase_ok:
+        logger.error("Lakebase analyst_review write failed for %s; decision not persisted", transaction_id)
+        return JSONResponse(
+            status_code=502,
+            content={"status": "error", "message": "Failed to record decision. Please try again."},
+        )
 
     # Append to audit log (full decision history, not just latest)
     _all_audit_cols = [
