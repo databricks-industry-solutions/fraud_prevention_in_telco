@@ -106,6 +106,8 @@ A standalone interactive demo designed for C-level and GTM presentations. Three 
 | **After-Hours Activity** | Sent to Review | Mixed signals — AgentBricks AI summarizes the case and assigns it to an analyst. Links to the Analyst case queue. |
 | **Routine Device Upgrade** | Approved | All checks pass. Zero-friction approval. Customer never notices. |
 
+![Fraud Engine Demo (Chapter 0)](docs/chapter_0.gif)
+
 Each scenario shows a two-column layout: transaction analysis with animated CDR rule evaluation on the left, AgentBricks summary + AI recommendation + engine decision on the right.
 
 **Two demo modes:** Manual (click scenario tabs) or Auto-Play All (hands-free, ~13s per scenario).
@@ -129,6 +131,8 @@ Three role-based views, each with dedicated AI capabilities:
 | **Executive** | C-suite, VP | Financial P&L, quarterly trends, regional teams, risk distribution, **Genie Space** chat |
 | **Management** | Fraud ops managers | Pipeline health, **AI forecast** (30-day), engine performance, team metrics, SLA tracking, mitigation effectiveness |
 | **Analyst** | Fraud investigators | Case queue, case detail + device profile, **AI investigation agent** (tool-calling), **Knowledge Assistant** (company playbook) |
+
+![Fraud Analyst AI Coworker](docs/analyst_coworker.gif)
 
 **Industry-configurable**: All domain-specific values (thresholds, mitigations, AI prompts, Genie/KA endpoints) live in `server/industry_config.py`.
 
